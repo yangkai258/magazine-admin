@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>杂志管理</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav">
+        <a href="/" class="nav-item"><span class="nav-icon">📊</span> 总览</a>
+        <a href="/magazine/list.html" class="nav-item active"><span class="nav-icon">📖</span> 杂志管理</a>
+        <a href="/cover/list.html" class="nav-item"><span class="nav-icon">🖼</span> 封面管理</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar"><h1 class="page-title">杂志管理</h1></header>
+      <div class="content-area">
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="搜索杂志名称...">
+          <button class="btn btn-primary" id="addBtn">＋ 新增杂志</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>封面</th><th>杂志名称</th><th>上传日期</th><th>状态</th><th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="magazineTable"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="emptyState" style="display:none">
+          <div class="empty-icon">📖</div>
+          <p>还没有杂志，点点「新增杂志」开始吧</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 新增/编辑 Modal -->
+  <div class="modal-overlay hidden" id="magazineModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalTitle">新增杂志</h3>
+        <button class="modal-close" id="closeModal">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="mId">
+        <div class="form-row">
+          <div class="form-group">
+            <label>杂志名称 *</label>
+            <input type="text" id="mName" placeholder="如：2026春季刊">
+          </div>
+          <div class="form-group">
+            <label>上传日期 *</label>
+            <input type="date" id="mDate">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>内容介绍</label>
+          <textarea id="mDesc" placeholder="杂志内容简介..."></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>PC端封面</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <img id="mCoverPcPreview" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='50' fill='%23ddd'><rect width='80' height='50'/></svg>" style="width:80px;height:50px;object-fit:cover;border-radius:4px">
+              <input type="text" id="mCoverPc" placeholder="封面图片URL" style="flex:1">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>移动端封面</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <img id="mCoverMobilePreview" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='50' fill='%23ddd'><rect width='80' height='50'/></svg>" style="width:80px;height:50px;object-fit:cover;border-radius:4px">
+              <input type="text" id="mCoverMobile" placeholder="封面图片URL" style="flex:1">
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>状态</label>
+          <select id="mEnabled" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            <option value="1">启用</option>
+            <option value="0">停用</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelModal">取消</button>
+        <button class="btn btn-primary" id="saveMagazine">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    let currentEditId = null;
+
+    async function loadMagazines() {
+      const search = document.getElementById('searchInput').value;
+      const magazines = await api.get('/magazines' + (search ? '?search=' + encodeURIComponent(search) : ''));
+      const tbody = document.getElementById('magazineTable');
+      const empty = document.getElementById('emptyState');
+      if (magazines.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+      tbody.innerHTML = magazines.map(m => `
+        <tr>
+          <td>${m.id}</td>
+          <td><img src="${coverImg(m.cover_pc)}" class="table-img" onerror="this.src='data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%2760%27 height=%2740%27 fill=%27%23ddd%27><rect width=%2760%27 height=%2740%27/></svg>'"></td>
+          <td><a href="/magazine/edit.html?id=${m.id}" style="color:var(--primary);text-decoration:none;font-weight:500">${m.name}</a></td>
+          <td>${formatDate(m.upload_date)}</td>
+          <td><span class="status-badge ${m.enabled ? 'status-enabled' : 'status-disabled'}">${m.enabled ? '启用' : '停用'}</span></td>
+          <td>
+            <a href="/magazine/edit.html?id=${m.id}" class="btn btn-sm btn-secondary">编辑</a>
+            <button class="btn btn-sm btn-danger" onclick="deleteMagazine(${m.id})">删除</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function deleteMagazine(id) {
+      if (!confirm('确认删除这本杂志？')) return;
+      await api.del('/magazines/' + id);
+      toast('删除成功', 'success');
+      loadMagazines();
+    }
+
+    document.getElementById('addBtn').addEventListener('click', () => {
+      currentEditId = null;
+      document.getElementById('modalTitle').textContent = '新增杂志';
+      document.getElementById('mId').value = '';
+      document.getElementById('mName').value = '';
+      document.getElementById('mDate').value = new Date().toISOString().slice(0,10);
+      document.getElementById('mDesc').value = '';
+      document.getElementById('mCoverPc').value = '';
+      document.getElementById('mCoverMobile').value = '';
+      document.getElementById('mCoverPcPreview').src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="50" fill="%23ddd"><rect width="80" height="50"/></svg>';
+      document.getElementById('mCoverMobilePreview').src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="50" fill="%23ddd"><rect width="80" height="50"/></svg>';
+      document.getElementById('mEnabled').value = '1';
+      document.getElementById('magazineModal').classList.remove('hidden');
+    });
+
+    document.getElementById('closeModal').addEventListener('click', () => document.getElementById('magazineModal').classList.add('hidden'));
+    document.getElementById('cancelModal').addEventListener('click', () => document.getElementById('magazineModal').classList.add('hidden'));
+
+    document.getElementById('saveMagazine').addEventListener('click', async () => {
+      const name = document.getElementById('mName').value.trim();
+      const upload_date = document.getElementById('mDate').value;
+      if (!name || !upload_date) { toast('名称和日期必填', 'error'); return; }
+      const payload = {
+        name, upload_date,
+        description: document.getElementById('mDesc').value,
+        cover_pc: document.getElementById('mCoverPc').value,
+        cover_mobile: document.getElementById('mCoverMobile').value,
+        enabled: Number(document.getElementById('mEnabled').value)
+      };
+      try {
+        if (currentEditId) {
+          await api.put('/magazines/' + currentEditId, payload);
+          toast('更新成功', 'success');
+        } else {
+          await api.post('/magazines', payload);
+          toast('新增成功', 'success');
+        }
+        document.getElementById('magazineModal').classList.add('hidden');
+        loadMagazines();
+      } catch (e) { toast(e.message, 'error'); }
+    });
+
+    // 封面预览
+    document.getElementById('mCoverPc').addEventListener('input', e => { document.getElementById('mCoverPcPreview').src = coverImg(e.target.value) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="50" fill="%23ddd"><rect width="80" height="50"/></svg>'; });
+    document.getElementById('mCoverMobile').addEventListener('input', e => { document.getElementById('mCoverMobilePreview').src = coverImg(e.target.value) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="50" fill="%23ddd"><rect width="80" height="50"/></svg>'; });
+
+    document.getElementById('searchInput').addEventListener('input', loadMagazines);
+    loadMagazines();
+  </script>
+</body>
+</html>

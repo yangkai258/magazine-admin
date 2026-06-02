@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>杂志管理平台</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav">
+        <a href="/" class="nav-item active" data-page="dashboard">
+          <span class="nav-icon">📊</span> 总览
+        </a>
+        <a href="/magazine/list.html" class="nav-item" data-page="magazine">
+          <span class="nav-icon">📖</span> 杂志管理
+        </a>
+        <a href="/cover/list.html" class="nav-item" data-page="cover">
+          <span class="nav-icon">🖼</span> 封面管理
+        </a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar">
+        <h1 class="page-title">总览</h1>
+      </header>
+      <div class="content-area" id="contentArea">
+        <div class="dashboard-cards">
+          <div class="dash-card">
+            <div class="dash-card-icon">📖</div>
+            <div class="dash-card-info">
+              <div class="dash-card-num" id="totalMagazines">--</div>
+              <div class="dash-card-label">杂志总数</div>
+            </div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-icon">✅</div>
+            <div class="dash-card-info">
+              <div class="dash-card-num" id="totalEnabled">--</div>
+              <div class="dash-card-label">启用中</div>
+            </div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-icon">🖼</div>
+            <div class="dash-card-info">
+              <div class="dash-card-num" id="totalCovers">--</div>
+              <div class="dash-card-label">封面数量</div>
+            </div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-icon">📄</div>
+            <div class="dash-card-info">
+              <div class="dash-card-num" id="totalPages">--</div>
+              <div class="dash-card-label">杂志页总数</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="/js/api.js"></script>
+  <script>
+    (async function() {
+      const [magazines, covers] = await Promise.all([
+        api.get('/magazines'),
+        api.get('/covers')
+      ]);
+      document.getElementById('totalMagazines').textContent = magazines.length;
+      document.getElementById('totalEnabled').textContent = magazines.filter(m => m.enabled).length;
+      document.getElementById('totalCovers').textContent = covers.length;
+      let pageCount = 0;
+      for (const m of magazines) {
+        const detail = await api.get('/magazines/' + m.id);
+        pageCount += (detail.pages || []).length;
+      }
+      document.getElementById('totalPages').textContent = pageCount;
+    })();
+  </script>
+</body>
+</html>

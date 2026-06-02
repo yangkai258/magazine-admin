@@ -1,0 +1,7 @@
+node_modules/
+db/data.json
+uploads/
+*.db
+*.sqlite
+.DS_Store
+Thumbs.db
