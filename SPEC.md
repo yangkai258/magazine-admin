@@ -139,3 +139,40 @@ npm start
 #   公共阅读端 http://localhost:50020
 #   管理后台   http://localhost:50040
 ```
+
+## 局域网（LAN）部署
+
+数据仍然走 OSS 当中间桥：admin 推 `data.json` 到 OSS → 阅读端从 OSS 拉。
+admin + reader 两个服务跑在同一台内网机器上，LAN 同事直接用：
+
+```text
+后端：    http://<本机 LAN IP>:50040/admin/login.html
+阅读端：http://<本机 LAN IP>:50020/
+
+默认账号：slug = zhuobao
+默认密码：见 .env 的 ADMIN_PASSWORD
+```
+
+**获取本机 LAN IP**：
+```powershell
+Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' }
+```
+
+**Windows 防火墙**（首次部署如果同事访问不到）：
+```powershell
+New-NetFirewallRule -DisplayName "Magazine Admin 50040" -Direction Inbound -LocalPort 50040 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "Magazine Reader 50020" -Direction Inbound -LocalPort 50020 -Protocol TCP -Action Allow
+```
+
+**环境变量覆盖**（如果默认端口被占）：
+```bash
+PUBLIC_PORT=50021 ADMIN_PORT=50041 npm start
+```
+
+**OSS 数据发布链路**：
+1. 同事在 admin 后台改完数据
+2. 点击 admin 顶部的「发布到阅读端」按钮（如果有）→ 调 `POST /api/admin/publish`
+3. 后端把 data.json 推到 OSS `magazine-admin/data.json`（CDN 缓存 5 分钟）
+4. 阅读端刷新即可看到新数据（≤ 5 分钟内）
+
+> 阅读端 HTML 直接 fetch OSS 上的 data.json（`https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/data.json`），所以 reader 跑在哪台机器不重要，**只要本机 + OSS 通**就行。

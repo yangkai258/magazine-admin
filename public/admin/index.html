@@ -60,6 +60,15 @@
             </div>
           </div>
         </div>
+
+        <div class="publish-panel" style="margin-top:24px;padding:20px 24px;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;display:flex;align-items:center;gap:16px;">
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">📤 发布到阅读端</div>
+            <div style="font-size:13px;color:var(--text-secondary)">把当前所有数据（杂志 / 页 / 封面）打包成 data.json 推到 OSS。阅读端会在 5 分钟内（CDN 缓存）看到最新数据。</div>
+            <div id="publishInfo" style="margin-top:8px;font-size:12px;color:var(--text-secondary)">未发布过</div>
+          </div>
+          <button id="publishBtn" class="btn btn-primary" onclick="publishToReader()">立即发布</button>
+        </div>
       </div>
     </main>
   </div>
@@ -84,6 +93,32 @@
         document.getElementById('contentArea').innerHTML = '<div style="padding:40px;color:#e53935">加载失败：' + e.message + '</div>';
       }
     })();
+
+    async function publishToReader() {
+      const btn = document.getElementById('publishBtn');
+      const info = document.getElementById('publishInfo');
+      if (btn.disabled) return;
+      btn.disabled = true;
+      const oldText = btn.textContent;
+      btn.textContent = '发布中…';
+      info.textContent = '正在推 data.json 到 OSS…';
+      try {
+        const r = await api.post('/admin/publish');
+        if (r && r.success) {
+          info.innerHTML = '✅ 已发布 · ' + (r.counts.tenants||0) + ' 租户 / ' + (r.counts.magazines||0) + ' 杂志 / ' + (r.counts.pages||0) + ' 页 / ' + (r.counts.covers||0) + ' 封面 · ' + r.bytes + ' bytes<br><a href="' + r.url + '" target="_blank" style="color:var(--primary);text-decoration:none;font-size:11px">查看 OSS 对象</a>';
+          toast('发布成功', 'success');
+        } else {
+          info.textContent = '❌ 发布失败：' + (r && r.error ? r.error : 'unknown');
+          toast('发布失败', 'error');
+        }
+      } catch (e) {
+        info.textContent = '❌ 发布失败：' + e.message;
+        toast('发布失败', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
+    }
   </script>
 </body>
 </html>
