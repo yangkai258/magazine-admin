@@ -129,13 +129,13 @@
     return 'pc';
   }
 
-  // ====== 拉 data.json（OSS） + 本地按 tenant 过滤 ======
-  // data.json = { tenants, magazines, pages, covers } —— snapshotForPublish 的产物
+  // ====== 拉 data（live 后端） + 本地按 tenant 过滤 ======
+  // SaaS 默认：fetch 同源 /api/public/data
+  // 也可走 MAG_CONFIG.DATA_URL（OSS / 跨域后端 / 任何 URL）
   function loadData() {
-    var url = (window.MAG_CONFIG && window.MAG_CONFIG.DATA_URL) || '';
-    if (!url) return Promise.reject(new Error('MAG_CONFIG.DATA_URL 未配置'));
-    return fetch(url, { cache: 'force-cache' }).then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status + ' 拉 data.json 失败');
+    var url = (window.MAG_CONFIG && window.MAG_CONFIG.DATA_URL) || (location.origin + '/api/public/data');
+    return fetch(url, { cache: 'no-cache' }).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' 拉 data 失败');
       return r.json();
     });
   }

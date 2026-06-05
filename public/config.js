@@ -1,11 +1,12 @@
 // 阅读端配置：splash / directory / viewer 三页共用
 // 阅读端没有构建步骤，直接 <script src="config.js"></script> 引入即可
-// 生产值：DATA_URL 指向 OSS 上 publish 出来的 data.json
-//         DEFAULT_TENANT 是 fallback slug（URL 没有 ?t= 时用）
+//
+// SaaS 模式下，DATA_URL 默认走「同源 /api/public/data」—— 阅读端和后端部署在一起，
+// 后端直接返 live 数据，无需 publish / OSS 中转。
+// 想要换成 OSS / 跨域后端 / 任何 URL，把下面 DATA_URL 填上即可（会覆盖同源默认）。
 //
 // ⚠️ 不要把 .env / 内网地址 / 测试 token 写到这里。
-// ⚠️ 部署时如有需要，build 脚本会替换下面这两个值（用 sed / 字符串替换即可）。
 window.MAG_CONFIG = {
-  DATA_URL: 'https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/data.json',
+  // DATA_URL: 'https://your-cdn.example.com/data.json',  // 留空 = 同源 /api/public/data
   DEFAULT_TENANT: 'zhuobao'
 };

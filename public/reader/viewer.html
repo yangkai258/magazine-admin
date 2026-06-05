@@ -566,10 +566,10 @@
   }
 
   function loadMagazine() {
-    var dataUrl = (window.MAG_CONFIG && window.MAG_CONFIG.DATA_URL) || '';
-    if (!dataUrl) return Promise.reject(new Error('配置缺失（DATA_URL 未设置）'));
-    return fetch(dataUrl, { cache: 'force-cache' }).then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status + ' 拉 data.json 失败');
+    // SaaS 默认：同源 /api/public/data；可由 MAG_CONFIG.DATA_URL 覆盖
+    var dataUrl = (window.MAG_CONFIG && window.MAG_CONFIG.DATA_URL) || (location.origin + '/api/public/data');
+    return fetch(dataUrl, { cache: 'no-cache' }).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' 拉 data 失败');
       return r.json();
     }).then(function(data) {
       var tenant = findTenantInData(data, tenantSlug);

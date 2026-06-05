@@ -184,8 +184,12 @@ app.post('/api/upload', auth.requireAuth, upload.single('file'), async (req, res
   } catch (err) { res.status(500).json({ error: 'OSS 上传失败: ' + err.message }); }
 });
 
-// ========== Publish ==========
-// 把当前 data 序列化成 public-safe 的 JSON，推到 OSS 给阅读端拉
+// ========== Publish (SaaS 模式下已不常用，留作可选缓存层) ==========
+// SaaS 模式：阅读端默认走同源 /api/public/data 拿 live 数据，不需 publish。
+// 仍保留这个端点以便需要 CDN 加速 / 跨域静态部署时手动触发：
+//   1. 把 data 快照推到 OSS
+//   2. 阅读端 config.js 把 DATA_URL 指向 OSS URL
+//   3. 阅读端就改读 CDN（带 5min 缓存）
 app.post('/api/admin/publish', auth.requireAuth, async (req, res) => {
   if (!ossClient) {
     return res.status(500).json({ error: 'OSS 未配置，无法 publish' });
