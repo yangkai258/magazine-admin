@@ -85,7 +85,7 @@
 <body>
 <div class="loading" id="loading">页面加载中...</div>
 
-<a class="back-btn" href="/">
+<a class="back-btn" id="backBtn" href="#">
   <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
   返回目录
 </a>
@@ -132,12 +132,21 @@
 
 <script src="lib/jquery.min.js"></script>
 <script src="lib/turn.min.js"></script>
+<script src="../config.js"></script>
 <script>
 (function() {
-  var API_BASE = '/api';  // 同源，避免部署后跨域
+  // ====== 多租户：解析当前 tenant slug ======
+  function resolveTenant() {
+    var q = new URLSearchParams(location.search).get('t');
+    return (q && q.trim()) || (window.MAG_CONFIG && window.MAG_CONFIG.DEFAULT_TENANT) || 'zhuobao';
+  }
+  var tenantSlug = resolveTenant();
   var magazineId = new URLSearchParams(location.search).get('id') || 1;
 
-  var pages = [];           // 从管理平台API获取
+  // 返回目录时把 tenant 带上
+  document.getElementById('backBtn').setAttribute('href', '../directory.html?t=' + encodeURIComponent(tenantSlug));
+
+  var pages = [];           // 从 OSS data.json 拉
   var TOTAL_IMGS = 0;       // 总图片数 = pages.length
   var currentImg = 1;
   var IS_MOBILE = $(window).width() < 768;
@@ -547,16 +556,45 @@
     }
   }
 
-  $.get(API_BASE + '/public/magazines/' + magazineId, function(m) {
-    preloadFirstImageThenInit(m);
-  }).fail(function() {
-    $('#loading').text('加载失败，请检查阅读端服务是否启动（http://localhost:3010）');
-  });
-
-  function updateDeskNav(page) {
-    $('#prevBtn').css('opacity', page <= 1 ? 0.3 : 1);
-    $('#nextBtn').css('opacity', page >= TOTAL_PAGES ? 0.3 : 1);
+  // ========== 拉数据（OSS data.json + 本地按 tenant 过滤）==========
+  function findTenantInData(data, slug) {
+    var list = (data.tenants || []);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].slug === slug) return list[i];
+    }
+    return null;
   }
+
+  function loadMagazine() {
+    var dataUrl = (window.MAG_CONFIG && window.MAG_CONFIG.DATA_URL) || '';
+    if (!dataUrl) return Promise.reject(new Error('配置缺失（DATA_URL 未设置）'));
+    return fetch(dataUrl, { cache: 'force-cache' }).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' 拉 data.json 失败');
+      return r.json();
+    }).then(function(data) {
+      var tenant = findTenantInData(data, tenantSlug);
+      if (!tenant) throw new Error('tenant "' + tenantSlug + '" 不存在');
+
+      var mid = Number(magazineId);
+      var mag = (data.magazines || []).find(function(m) {
+        return m.tenant_id === tenant.id && m.id === mid && m.enabled === 1;
+      });
+      if (!mag) throw new Error('杂志不存在或未启用');
+
+      var magPages = (data.pages || [])
+        .filter(function(p) { return p.tenant_id === tenant.id && p.magazine_id === mag.id; })
+        .sort(function(a, b) { return a.page_order - b.page_order; });
+
+      return Object.assign({}, mag, { pages: magPages });
+    });
+  }
+
+  loadMagazine().then(function(m) {
+    preloadFirstImageThenInit(m);
+  }).catch(function(err) {
+    console.error('[viewer] load failed:', err);
+    $('#loading').text('加载失败：' + (err && err.message ? err.message : '未知错误'));
+  });
 })();
 </script>
 </body>

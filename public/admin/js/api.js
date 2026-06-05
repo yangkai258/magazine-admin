@@ -1,4 +1,4 @@
-const API_BASE = '/api';  // 同源，admin 跑在 3030，浏览器自动拼成 http://localhost:3030/api
+const API_BASE = '/api';  // 同源，admin 跑在 50030，浏览器自动拼成 http://localhost:50030/api
 
 const api = {
   async get(path) {

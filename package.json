@@ -5,7 +5,8 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "nodemon --watch server --ignore server/db/data.json --ignore uploads/ server/index.js"
+    "dev": "nodemon --watch server --ignore server/db/data.json --ignore uploads/ server/index.js",
+    "build:reader": "node scripts/build-reader.js"
   },
   "dependencies": {
     "ali-oss": "^6.23.0",
@@ -15,6 +16,7 @@
     "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
+    "archiver": "^8.0.0",
     "nodemon": "^3.1.14"
   }
 }

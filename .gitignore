@@ -7,3 +7,10 @@ uploads/
 Thumbs.db
 .env
 .env.local
+.mavis/
+dist/
+tools/
+outputs/
+deliverable.md
+*.log
+build/

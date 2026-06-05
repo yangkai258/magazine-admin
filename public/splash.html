@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>卓宝电子刊</title>
+  <title>电子刊</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
@@ -89,20 +89,29 @@
   <img class="splash-cover" id="cover" alt="">
   <div class="splash-info">
     <img class="splash-logo" id="logo" src="images/logo.png" alt="logo">
-    <div class="splash-title" id="title">卓宝电子刊</div>
+    <div class="splash-title" id="title">电子刊</div>
     <div class="splash-line" id="line"></div>
   </div>
 </div>
 <div class="splash-skip" id="skip">点击跳过</div>
 
+<script src="config.js"></script>
 <script>
 (function() {
-  var timer = setTimeout(goDirectory, 3000);
+  // ====== 多租户：解析当前 tenant slug ======
+  // 优先级：URL ?t=xxx > window.MAG_CONFIG.DEFAULT_TENANT
+  function resolveTenant() {
+    var q = new URLSearchParams(location.search).get('t');
+    return (q && q.trim()) || (window.MAG_CONFIG && window.MAG_CONFIG.DEFAULT_TENANT) || 'zhuobao';
+  }
+  var tenantSlug = resolveTenant();
 
+  // 把 tenant 传下去：点 skip / 自动跳转时都带上
   function goDirectory() {
     clearTimeout(timer);
-    location.href = 'directory.html';
+    location.href = 'directory.html?t=' + encodeURIComponent(tenantSlug);
   }
+  var timer = setTimeout(goDirectory, 3000);
 
   document.getElementById('splash').addEventListener('click', goDirectory);
   document.getElementById('skip').addEventListener('click', function(e) {
@@ -116,64 +125,72 @@
     if (/Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
       return 'mobile';
     }
-    // 兜底：viewport 窄的当 mobile
     if (window.innerWidth <= 768) return 'mobile';
     return 'pc';
   }
 
-  // 拉取封面（PC/Mobile 区分），失败时降级到 logo 主视觉
-  // 端口回退：先打同源，失败再试各候选端口（旧的 3010/3011/3030/3031 上没这个端点）
+  // ====== 拉 data.json（OSS） + 本地按 tenant 过滤 ======
+  // data.json = { tenants, magazines, pages, covers } —— snapshotForPublish 的产物
+  function loadData() {
+    var url = (window.MAG_CONFIG && window.MAG_CONFIG.DATA_URL) || '';
+    if (!url) return Promise.reject(new Error('MAG_CONFIG.DATA_URL 未配置'));
+    return fetch(url, { cache: 'force-cache' }).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' 拉 data.json 失败');
+      return r.json();
+    });
+  }
+
+  function findTenant(data, slug) {
+    var list = (data.tenants || []);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].slug === slug) return list[i];
+    }
+    return null;
+  }
+
+  // 拉封面：按当前 tenant + 设备类型 取全局（magazine_id=null）的最新一张
   function loadCover() {
     var type = detectDeviceType();
-    var candidates = [
-      '',
-      'http://localhost:3012',
-      'http://localhost:3032',
-      'http://localhost:3011',
-      'http://localhost:3031'
-    ];
-    function tryOne(i) {
-      if (i >= candidates.length) throw new Error('no cover for ' + type + ' on any port');
-      var base = candidates[i];
-      var url = base + '/api/public/cover?type=' + type;
-      return fetch(url).then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status + ' at ' + url);
-        return r.json();
-      }).catch(function(e) {
-        console.warn('[splash] ' + url + ' failed: ' + e.message + ', trying next');
-        return tryOne(i + 1);
+    return loadData().then(function(data) {
+      var tenant = findTenant(data, tenantSlug);
+      if (!tenant) throw new Error('tenant "' + tenantSlug + '" 不存在');
+      // 标题用租户名
+      var $title = document.getElementById('title');
+      $title.textContent = (tenant.name || '') + '电子刊';
+      document.title = tenant.name ? (tenant.name + '电子刊') : '电子刊';
+
+      var covers = (data.covers || []).filter(function(c) {
+        return c.tenant_id === tenant.id
+            && c.type === type
+            && c.magazine_id == null;
       });
-    }
-    return tryOne(0)
-      .then(function(cover) {
-        var $cover = document.getElementById('cover');
-        // 补全绝对 URL：如果是相对路径 /uploads/xxx，加上当前 base
-        var src = cover.image_path;
-        if (src.startsWith('/') && candidates.length > 0) {
-          // 同源路径直接用（同源时浏览器自动拼），跨 base 时拼绝对 URL
-          var triedBase = candidates.find(function(b) { return cover._fromBase === b; }) || '';
-          src = triedBase + src;
-        }
-        $cover.src = src;
-        if ($cover.complete && $cover.naturalWidth > 0) {
-          $cover.classList.add('show');
-        } else {
-          $cover.onload = function() { $cover.classList.add('show'); };
-        }
-      })
-      .catch(function(err) {
-        console.warn('[splash] 全部端口都没拉到封面:', err.message, '— 降级到 logo');
-        var $logo = document.getElementById('logo');
-        $logo.style.width = '180px';
-        $logo.style.height = '180px';
-        $logo.style.filter = 'invert(1) drop-shadow(0 2px 8px rgba(0,0,0,0.3))';
-        document.querySelector('.splash').style.background = '#2a2a2a';
-      });
+      // data.covers 已按 created_at desc 排序（snapshotForPublish 保留 db 排序），第一条即最新
+      if (covers.length === 0) throw new Error('tenant "' + tenantSlug + '" ' + type + ' 暂无封面');
+      return covers[0];
+    }).then(function(cover) {
+      var $cover = document.getElementById('cover');
+      $cover.src = cover.image_path;
+      if ($cover.complete && $cover.naturalWidth > 0) {
+        $cover.classList.add('show');
+      } else {
+        $cover.onload = function() { $cover.classList.add('show'); };
+      }
+    });
+  }
+
+  // 拉失败 → 降级到 logo 主视觉（仍然跳目录）
+  function fallbackToLogo() {
+    console.warn('[splash] 拉封面失败，降级到 logo');
+    var $logo = document.getElementById('logo');
+    $logo.style.width = '180px';
+    $logo.style.height = '180px';
+    $logo.style.filter = 'invert(1) drop-shadow(0 2px 8px rgba(0,0,0,0.3))';
+    document.querySelector('.splash').style.background = '#2a2a2a';
   }
 
   // 启动：拉封面 + 动画
   window.addEventListener('load', function() {
-    loadCover();
+    loadCover().catch(fallbackToLogo);
     setTimeout(function() { document.getElementById('logo').classList.add('show'); }, 100);
     setTimeout(function() { document.getElementById('title').classList.add('show'); }, 400);
     setTimeout(function() { document.getElementById('line').classList.add('show'); }, 600);

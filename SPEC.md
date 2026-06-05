@@ -10,8 +10,8 @@
 - **前端**: 原生 HTML/CSS/JS，无框架依赖
 - **文件存储**: 本地 `public/uploads/` 目录（或映射到 OSS）
 - **端口**:
-  - 公共阅读端（`server/public.js`）：**3010** —— splash → directory → reader（3001 已被别的后台占着，挤不进去）
-  - 管理后台（`server/admin.js`）：**3030** —— `/admin/` 全部 CRUD + 上传
+  - 公共阅读端（`server/public.js`）：**50020**（可由 `PUBLIC_PORT` env 覆盖）—— splash → directory → reader
+  - 管理后台（`server/admin.js`）：**50040**（可由 `ADMIN_PORT` env 覆盖）—— `/admin/` 全部 CRUD + 上传
   - 共享同一份 `db/data.json`
 
 ## 数据模型（JSON文件存储）
@@ -136,6 +136,6 @@ cd magazine-admin
 npm install
 npm start
 # 同时启动两端：
-#   公共阅读端 http://localhost:3010
-#   管理后台   http://localhost:3030
+#   公共阅读端 http://localhost:50020
+#   管理后台   http://localhost:50040
 ```

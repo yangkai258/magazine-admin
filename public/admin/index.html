@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>杂志管理平台</title>
   <link rel="stylesheet" href="/admin/css/style.css">
+  <script src="/admin/js/auth.js"></script>
 </head>
 <body>
+  <script>MAG_AUTH.requireAuth();</script>
   <div class="admin-layout">
     <aside class="sidebar">
       <div class="sidebar-logo">📚 杂志管理平台</div>
@@ -25,6 +27,7 @@
     <main class="main-content">
       <header class="top-bar">
         <h1 class="page-title">总览</h1>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button>
       </header>
       <div class="content-area" id="contentArea">
         <div class="dashboard-cards">

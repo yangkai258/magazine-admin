@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>目录 — 卓宝电子刊</title>
+  <title>目录 — 电子刊</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { min-height: 100%; background: #fff; font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif; color: #222; }
@@ -97,7 +97,7 @@
 <body>
 <div class="header">
   <img class="header-logo" src="images/logo.png" alt="logo">
-  <div class="header-title">卓宝电子刊</div>
+  <div class="header-title" id="headerTitle">电子刊</div>
 </div>
 
 <div class="book-list" id="bookList">
@@ -106,38 +106,75 @@
 
 <div class="footer-note">支持手机 / 平板 / 电脑阅读</div>
 
+<script src="config.js"></script>
 <script>
-var API_BASE = '/api';  // 同源，避免部署后跨域
+(function() {
+  // ====== 多租户：解析当前 tenant slug ======
+  function resolveTenant() {
+    var q = new URLSearchParams(location.search).get('t');
+    return (q && q.trim()) || (window.MAG_CONFIG && window.MAG_CONFIG.DEFAULT_TENANT) || 'zhuobao';
+  }
+  var tenantSlug = resolveTenant();
 
-async function load() {
-  var list = document.getElementById('bookList');
-  try {
-    // 公共端点（只返回 enabled=1），防止草稿泄露
-    var magazines = await fetch(API_BASE + '/public/magazines').then(r => r.json());
-    list.innerHTML = '';
-    if (!magazines || magazines.length === 0) {
-      list.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa">暂无杂志</div>';
+  function findTenant(data, slug) {
+    var list = (data.tenants || []);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].slug === slug) return list[i];
+    }
+    return null;
+  }
+
+  async function load() {
+    var list = document.getElementById('bookList');
+    var dataUrl = (window.MAG_CONFIG && window.MAG_CONFIG.DATA_URL) || '';
+    if (!dataUrl) {
+      list.innerHTML = '<div style="text-align:center;padding:40px;color:#e53935">配置缺失（DATA_URL 未设置）</div>';
       return;
     }
-    magazines.forEach(function(m) {
-      var cover = m.cover_pc || m.cover_mobile || '';
-      var item = document.createElement('a');
-      item.className = 'book-item';
-      item.href = 'reader/viewer.html?id=' + m.id;
-      item.innerHTML =
-        '<img class="book-thumb" src="' + cover + '" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%2788%27 height=%2764%27 fill=%27%23f5f5f5%27><rect width=%2788%27 height=%2764%27/><text x=%2750%25%27 y=%2750%25%27 text-anchor=%27middle%27 dy=%27.3em%27 font-size=%2720%27>📖</text></svg>\'">' +
-        '<div class="book-info">' +
-        '<div class="book-name">' + m.name + '</div>' +
-        '<div class="book-desc">点击阅读</div>' +
-        '</div>' +
-        '<svg class="book-arrow" viewBox="0 0 24 24"><path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>';
-      list.appendChild(item);
-    });
-  } catch (e) {
-    list.innerHTML = '<div style="text-align:center;padding:40px;color:#e53935">加载失败，请确保杂志管理平台已启动</div>';
+    try {
+      // 拉全集 data.json（OSS），本地按 tenant 过滤
+      var data = await fetch(dataUrl, { cache: 'force-cache' }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      });
+      var tenant = findTenant(data, tenantSlug);
+      if (!tenant) throw new Error('tenant "' + tenantSlug + '" 不存在');
+
+      // 标题用租户名
+      document.title = tenant.name ? (tenant.name + ' - 目录') : '目录';
+      document.getElementById('headerTitle').textContent = (tenant.name || '') + '电子刊';
+
+      var magazines = (data.magazines || [])
+        .filter(function(m) { return m.tenant_id === tenant.id && m.enabled === 1; })
+        .sort(function(a, b) { return (b.created_at || '').localeCompare(a.created_at || ''); });
+
+      list.innerHTML = '';
+      if (magazines.length === 0) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa">暂无杂志</div>';
+        return;
+      }
+      magazines.forEach(function(m) {
+        var cover = m.cover_pc || m.cover_mobile || '';
+        var item = document.createElement('a');
+        item.className = 'book-item';
+        // 把 tenant slug 传下去
+        item.href = 'reader/viewer.html?id=' + m.id + '&t=' + encodeURIComponent(tenantSlug);
+        item.innerHTML =
+          '<img class="book-thumb" src="' + cover + '" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%2788%27 height=%2764%27 fill=%27%23f5f5f5%27><rect width=%2788%27 height=%2764%27/><text x=%2750%25%27 y=%2750%25%27 text-anchor=%27middle%27 dy=%27.3em%27 font-size=%2720%27>📖</text></svg>\'">' +
+          '<div class="book-info">' +
+          '<div class="book-name">' + m.name + '</div>' +
+          '<div class="book-desc">点击阅读</div>' +
+          '</div>' +
+          '<svg class="book-arrow" viewBox="0 0 24 24"><path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>';
+        list.appendChild(item);
+      });
+    } catch (e) {
+      console.error('[directory] load failed:', e);
+      list.innerHTML = '<div style="text-align:center;padding:40px;color:#e53935">加载失败，请检查网络或数据源</div>';
+    }
   }
-}
-load();
+  load();
+})();
 </script>
 </body>
 </html>

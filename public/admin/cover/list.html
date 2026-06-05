@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>封面管理</title>
   <link rel="stylesheet" href="/admin/css/style.css">
+  <script src="/admin/js/auth.js"></script>
   <style>
     .cover-spec {
       background: linear-gradient(135deg, #f0f7ff 0%, #e8f4ff 100%);
@@ -43,6 +44,7 @@
   </style>
 </head>
 <body>
+  <script>MAG_AUTH.requireAuth();</script>
   <div class="admin-layout">
     <aside class="sidebar">
       <div class="sidebar-logo">📚 杂志管理平台</div>
@@ -53,7 +55,7 @@
       </nav>
     </aside>
     <main class="main-content">
-      <header class="top-bar"><h1 class="page-title">封面管理</h1></header>
+      <header class="top-bar"><h1 class="page-title">封面管理</h1><button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button></header>
       <div class="content-area">
         <div class="tabs">
           <button class="tab active" data-type="pc">🖥 PC端封面</button>
