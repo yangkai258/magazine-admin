@@ -7,7 +7,8 @@ const defaultData = {
   tenants: [],
   magazines: [],
   pages: [],
-  covers: []
+  covers: [],
+  audit_log: []
 };
 
 let data = loadData();
@@ -28,8 +29,14 @@ function loadData() {
     if (fs.existsSync(dataPath)) {
       const raw = fs.readFileSync(dataPath, 'utf8');
       const parsed = JSON.parse(raw);
-      // 兼容旧数据（没有 tenants 字段）
+      // 兼容旧数据（schema v1/v2 缺字段）
       if (!parsed.tenants) parsed.tenants = [];
+      if (!parsed.audit_log) parsed.audit_log = [];
+      // 兼容：老 tenants 缺 is_platform_admin / suspended
+      parsed.tenants.forEach(t => {
+        if (t.is_platform_admin === undefined) t.is_platform_admin = false;
+        if (t.suspended === undefined) t.suspended = false;
+      });
       return parsed;
     }
   } catch (e) { console.error('loadData error:', e.message); }
@@ -60,7 +67,7 @@ function getTenantBySlug(slug) {
   return (data.tenants || []).find(t => t.slug === slug);
 }
 
-function createTenant({ slug, name, password }) {
+function createTenant({ slug, name, password, is_platform_admin }) {
   if (!slug || !name) throw new Error('slug and name are required');
   if (getTenantBySlug(slug)) throw new Error(`tenant slug '${slug}' already exists`);
   const tenant = {
@@ -68,6 +75,8 @@ function createTenant({ slug, name, password }) {
     slug,
     name,
     password: password || '',  // 空密码 = 不可登录
+    is_platform_admin: !!is_platform_admin,
+    suspended: false,
     created_at: new Date().toISOString()
   };
   if (!data.tenants) data.tenants = [];
@@ -79,9 +88,19 @@ function createTenant({ slug, name, password }) {
 function updateTenant(id, fields) {
   const idx = (data.tenants || []).findIndex(t => t.id === Number(id));
   if (idx === -1) return null;
-  data.tenants[idx] = { ...data.tenants[idx], ...fields, id: data.tenants[idx].id };
+  // 保留 id 和 created_at
+  data.tenants[idx] = {
+    ...data.tenants[idx],
+    ...fields,
+    id: data.tenants[idx].id,
+    created_at: data.tenants[idx].created_at
+  };
   saveData();
   return data.tenants[idx];
+}
+
+function setTenantSuspended(id, suspended) {
+  return updateTenant(id, { suspended: !!suspended });
 }
 
 function deleteTenant(id) {
@@ -99,9 +118,55 @@ function deleteTenant(id) {
 function verifyTenantPassword(slug, password) {
   const tenant = getTenantBySlug(slug);
   if (!tenant) return null;
+  if (tenant.suspended) return null;  // 暂停的租户不能登录
   if (!tenant.password) return null;  // 没设密码不能登录
   if (tenant.password !== password) return null;
   return tenant;
+}
+
+// ========== Audit Log ==========
+function addAuditLog(entry) {
+  if (!data.audit_log) data.audit_log = [];
+  const log = {
+    id: nextId(data.audit_log),
+    timestamp: new Date().toISOString(),
+    actor_tenant_id: entry.actor_tenant_id || null,
+    actor_tenant_slug: entry.actor_tenant_slug || null,
+    actor_is_platform_admin: !!entry.actor_is_platform_admin,
+    tenant_id: entry.tenant_id || null,  // 受影响租户
+    action: entry.action,
+    target_type: entry.target_type || null,
+    target_id: entry.target_id || null,
+    details: entry.details || null,
+    ip: entry.ip || null,
+    user_agent: entry.user_agent || null
+  };
+  data.audit_log.push(log);
+  // 防止 log 无限增长：保留最近 10000 条
+  if (data.audit_log.length > 10000) {
+    data.audit_log = data.audit_log.slice(-10000);
+  }
+  saveData();
+  return log;
+}
+
+function getAuditLogs({ tenantId, actorTenantId, action, limit = 200, offset = 0 } = {}) {
+  let list = (data.audit_log || []).slice();
+  if (tenantId !== undefined && tenantId !== null) {
+    list = list.filter(l => l.tenant_id === Number(tenantId));
+  }
+  if (actorTenantId !== undefined && actorTenantId !== null) {
+    list = list.filter(l => l.actor_tenant_id === Number(actorTenantId));
+  }
+  if (action) {
+    list = list.filter(l => l.action === action);
+  }
+  // 按时间倒序
+  list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  return {
+    total: list.length,
+    items: list.slice(offset, offset + limit)
+  };
 }
 
 // ========== Magazines ==========
@@ -280,41 +345,74 @@ function deleteCover(id, { tenantId } = {}) {
   return data.covers.length < before;
 }
 
+// ========== 租户用量统计（平台管理用） ==========
+function getTenantUsage(tenantId) {
+  const tid = Number(tenantId);
+  return {
+    tenant_id: tid,
+    magazine_count: data.magazines.filter(m => m.tenant_id === tid).length,
+    enabled_magazine_count: data.magazines.filter(m => m.tenant_id === tid && m.enabled === 1).length,
+    page_count: data.pages.filter(p => p.tenant_id === tid).length,
+    cover_count: data.covers.filter(c => c.tenant_id === tid).length
+  };
+}
+
 // ========== Publish ==========
-// 把内存中当前 data 序列化成 publish-safe 的快照（不含 _meta）
+// 把内存中当前 data 序列化成 publish-safe 的快照（不含 password 和内部字段）
 function snapshotForPublish() {
   return {
-    tenants: (data.tenants || []).map(t => ({
-      id: t.id, slug: t.slug, name: t.name
-      // 不暴露 password
-    })),
-    magazines: data.magazines.map(m => ({
-      id: m.id, tenant_id: m.tenant_id, name: m.name,
-      upload_date: m.upload_date, description: m.description,
-      cover_pc: m.cover_pc, cover_mobile: m.cover_mobile,
-      enabled: m.enabled, created_at: m.created_at
-    })),
-    pages: data.pages.map(p => ({
-      id: p.id, tenant_id: p.tenant_id, magazine_id: p.magazine_id,
-      page_order: p.page_order, image_path: p.image_path, created_at: p.created_at
-    })),
-    covers: data.covers.map(c => ({
-      id: c.id, tenant_id: c.tenant_id, magazine_id: c.magazine_id,
-      type: c.type, image_path: c.image_path, created_at: c.created_at
-    }))
+    tenants: (data.tenants || [])
+      .filter(t => !t.suspended)  // 暂停的租户不出现在公共列表
+      .map(t => ({
+        id: t.id, slug: t.slug, name: t.name
+        // 不暴露 password / is_platform_admin / suspended / created_at
+      })),
+    magazines: data.magazines
+      .filter(m => {
+        const t = (data.tenants || []).find(x => x.id === m.tenant_id);
+        return t && !t.suspended;  // 暂停租户的杂志不出现
+      })
+      .map(m => ({
+        id: m.id, tenant_id: m.tenant_id, name: m.name,
+        upload_date: m.upload_date, description: m.description,
+        cover_pc: m.cover_pc, cover_mobile: m.cover_mobile,
+        enabled: m.enabled, created_at: m.created_at
+      })),
+    pages: data.pages
+      .filter(p => {
+        const t = (data.tenants || []).find(x => x.id === p.tenant_id);
+        return t && !t.suspended;
+      })
+      .map(p => ({
+        id: p.id, tenant_id: p.tenant_id, magazine_id: p.magazine_id,
+        page_order: p.page_order, image_path: p.image_path, created_at: p.created_at
+      })),
+    covers: data.covers
+      .filter(c => {
+        const t = (data.tenants || []).find(x => x.id === c.tenant_id);
+        return t && !t.suspended;
+      })
+      .map(c => ({
+        id: c.id, tenant_id: c.tenant_id, magazine_id: c.magazine_id,
+        type: c.type, image_path: c.image_path, created_at: c.created_at
+      }))
   };
 }
 
 module.exports = {
   // tenants
-  getAllTenants, getTenant, getTenantBySlug, createTenant, updateTenant, deleteTenant,
+  getAllTenants, getTenant, getTenantBySlug, createTenant, updateTenant, setTenantSuspended, deleteTenant,
   verifyTenantPassword,
+  // audit
+  addAuditLog, getAuditLogs,
   // magazines
   getAllMagazines, getMagazine, createMagazine, updateMagazine, deleteMagazine,
   // pages
   getPages, addPage, addPages, reorderPages, deletePage,
   // covers
   getAllCovers, createCover, deleteCover,
+  // usage
+  getTenantUsage,
   // publish
   snapshotForPublish
 };

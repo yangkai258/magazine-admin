@@ -144,10 +144,13 @@
               id="slug"
               name="slug"
               value="zhuobao"
-              readonly
-              title="请联系平台管理员获取租户标识"
+              autocomplete="username"
+              autocapitalize="off"
+              spellcheck="false"
+              required
+              placeholder="如 zhuobao / company2"
             >
-            <div class="form-hint">请联系平台管理员获取</div>
+            <div class="form-hint">不知道？问平台管理员，或者看「平台管理 → 租户列表」</div>
           </div>
 
           <div class="form-group">
@@ -187,8 +190,22 @@
         })
         .catch(function () { /* 未登录就停在登录页 */ });
 
-      var form = document.getElementById('loginForm');
+      // slug 字段智能预填：URL ?t=xxx 优先，其次上次登录的，再其次默认值
       var slugInput = document.getElementById('slug');
+      var urlSlug = (new URLSearchParams(location.search).get('t') || '').trim();
+      var lastSlug = '';
+      try { lastSlug = (localStorage.getItem('mag_last_login_slug') || '').trim(); } catch (e) {}
+      if (urlSlug) {
+        slugInput.value = urlSlug;
+      } else if (lastSlug) {
+        slugInput.value = lastSlug;
+      }
+      slugInput.focus();
+      if (slugInput.value) {
+        document.getElementById('password').focus();
+      }
+
+      var form = document.getElementById('loginForm');
       var pwdInput = document.getElementById('password');
       var errBox = document.getElementById('loginError');
       var submitBtn = document.getElementById('loginSubmit');
@@ -231,6 +248,8 @@
           })
           .then(function (result) {
             if (result.ok && result.body && result.body.success) {
+              // 记下这次登录的 slug，下次来自动预填
+              try { localStorage.setItem('mag_last_login_slug', slug); } catch (e) {}
               // 登录成功 —— 跳回原页或首页（由 auth.js 统一管）
               location.href = window.MAG_AUTH.getRedirectTarget();
               return;

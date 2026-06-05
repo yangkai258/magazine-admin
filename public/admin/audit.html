@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>审计日志</title>
+  <link rel="stylesheet" href="/admin/css/style.css">
+  <script src="/admin/js/auth.js"></script>
+  <style>
+    /* 顶部说明卡片 */
+    .audit-notice {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border: 1px solid #fcd34d;
+      border-left: 4px solid #f59e0b;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13px;
+      color: #78350f;
+      line-height: 1.6;
+    }
+    .audit-notice-icon { font-size: 22px; flex-shrink: 0; }
+    .audit-notice-title { font-weight: 600; margin-bottom: 2px; }
+    .audit-notice-body { font-size: 12px; color: #92400e; }
+
+    /* 筛选栏 */
+    .filter-bar {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+      margin-bottom: 16px;
+    }
+    .filter-bar .form-group { min-width: 160px; }
+    .filter-bar .form-group label { font-size: 12px; }
+    .filter-bar select {
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+      background: #fff;
+      min-width: 160px;
+    }
+    .filter-bar select:focus { border-color: var(--primary); }
+    .filter-bar .filter-actions {
+      display: flex;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    /* 表格 */
+    .audit-table { font-size: 12px; }
+    .audit-table th, .audit-table td { padding: 10px 12px; }
+    .audit-table td.mono {
+      font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .audit-table .col-time { white-space: nowrap; min-width: 145px; }
+    .audit-table .col-actor { min-width: 130px; }
+    .audit-table .col-target { min-width: 110px; }
+    .audit-table .col-ip { white-space: nowrap; min-width: 110px; }
+    .audit-table .col-details { min-width: 180px; max-width: 360px; }
+
+    /* 动作标签 */
+    .action-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .action-tag.auth      { background: #e0f2fe; color: #075985; }
+    .action-tag.auth-fail { background: #fee2e2; color: #991b1b; }
+    .action-tag.tenant    { background: #ede9fe; color: #5b21b6; }
+    .action-tag.tenant-danger { background: #fee2e2; color: #991b1b; }
+    .action-tag.magazine  { background: #dcfce7; color: #166534; }
+    .action-tag.magazine-danger { background: #fee2e2; color: #991b1b; }
+    .action-tag.page      { background: #ccfbf1; color: #115e59; }
+    .action-tag.cover     { background: #fce7f3; color: #9d174d; }
+    .action-tag.file      { background: #fef3c7; color: #92400e; }
+    .action-tag.publish   { background: #ffedd5; color: #9a3412; }
+    .action-tag.default   { background: #f3f4f6; color: #374151; }
+
+    /* 平台管理员标记 */
+    .platform-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 8px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+
+    /* 详情展开 */
+    .details-toggle {
+      cursor: pointer;
+      color: var(--primary);
+      font-size: 12px;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .details-toggle:hover { text-decoration: underline; }
+    .details-content {
+      display: none;
+      margin-top: 6px;
+      padding: 8px 10px;
+      background: #f9fafb;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 11px;
+      color: #1f2937;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 240px;
+      overflow: auto;
+    }
+    .details-content.show { display: block; }
+    .details-empty { color: var(--text-secondary); font-style: italic; }
+
+    /* 分页 */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .pagination .page-info b { color: var(--text); }
+    .pagination .page-buttons { display: flex; gap: 8px; }
+    .pagination .page-buttons .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* 加载中/空态 */
+    .audit-loading {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+    .audit-loading .spin {
+      display: inline-block;
+      width: 28px; height: 28px;
+      border: 3px solid #e5e7eb;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 403 拦截 */
+    .forbidden-card {
+      max-width: 520px;
+      margin: 60px auto;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .forbidden-card .icon { font-size: 56px; margin-bottom: 8px; }
+    .forbidden-card h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+    .forbidden-card p { color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+
+    /* 响应式 */
+    @media (max-width: 768px) {
+      .filter-bar .filter-actions { margin-left: 0; width: 100%; }
+      .audit-table .col-details { max-width: 200px; }
+    }
+  </style>
+</head>
+<body>
+  <script>MAG_AUTH.requireAuth();</script>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav">
+        <a href="/admin/" class="nav-item" data-page="dashboard">
+          <span class="nav-icon">📊</span> 总览
+        </a>
+        <a href="/admin/magazine/list.html" class="nav-item" data-page="magazine">
+          <span class="nav-icon">📖</span> 杂志管理
+        </a>
+        <a href="/admin/cover/list.html" class="nav-item" data-page="cover">
+          <span class="nav-icon">🖼</span> 封面管理
+        </a>
+        <a href="/admin/platform.html" class="nav-item platform-only" data-page="platform" style="display:none">
+          <span class="nav-icon">🏢</span> 平台管理
+        </a>
+        <a href="/admin/audit.html" class="nav-item platform-only active" data-page="audit" style="display:none">
+          <span class="nav-icon">📋</span> 审计日志
+        </a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar">
+        <h1 class="page-title">审计日志</h1>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button>
+      </header>
+      <div class="content-area" id="contentArea">
+        <!-- 加载中占位：JS 接管后会替换 -->
+        <div class="audit-loading"><div class="spin"></div><div>加载中...</div></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/admin/js/api.js"></script>
+  <script>
+    // ========== 静态：action 列表 + 分类配色 ==========
+    // 与 server/admin.js 里 audit(req, action, ...) 调用的 action 类型保持同步
+    const ACTION_CATEGORIES = {
+      auth:           { label: '认证',       actions: ['login', 'logout'] },
+      'auth-fail':    { label: '认证失败',   actions: ['login_failed'] },
+      tenant:         { label: '租户',       actions: ['create_tenant', 'update_tenant', 'unsuspend_tenant'] },
+      'tenant-danger':{ label: '租户(危险)', actions: ['delete_tenant', 'suspend_tenant'] },
+      magazine:       { label: '杂志',       actions: ['create_magazine', 'update_magazine'] },
+      'magazine-danger':{ label: '杂志(危险)', actions: ['delete_magazine'] },
+      page:           { label: '杂志页',     actions: ['add_page', 'add_pages_batch', 'reorder_pages', 'delete_page'] },
+      cover:          { label: '封面',       actions: ['create_cover', 'delete_cover'] },
+      file:           { label: '文件',       actions: ['upload_file'] },
+      publish:        { label: '发布',       actions: ['publish'] }
+    };
+
+    // 拉平的 action 列表（保留插入顺序）
+    const ALL_ACTIONS = [];
+    Object.values(ACTION_CATEGORIES).forEach(function (cat) {
+      cat.actions.forEach(function (a) { ALL_ACTIONS.push(a); });
+    });
+
+    // ========== 运行时状态 ==========
+    const state = {
+      tenantsById: {},            // tenantId -> {id, slug, name, is_platform_admin}
+      tenantFilter: '',           // '' 表示全部
+      actionFilter: '',           // '' 表示全部
+      limit: 100,
+      offset: 0,
+      total: 0,
+      items: [],
+      loading: false,
+      isPlatformAdmin: false
+    };
+
+    // ========== 工具函数 ==========
+    function escapeHtml(s) {
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function formatTimestamp(iso) {
+      if (!iso) return '-';
+      // ISO 形如 2026-06-05T13:22:00.000Z → 转 YYYY-MM-DD HH:MM:SS（按本地时区）
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      const pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+        + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+
+    function actionCategory(action) {
+      for (const cls in ACTION_CATEGORIES) {
+        if (ACTION_CATEGORIES[cls].actions.indexOf(action) !== -1) return cls;
+      }
+      return 'default';
+    }
+
+    // 把 details JSON + action 翻译成人话
+    // 例：'create_tenant' + {slug:'x', name:'y'} -> "平台管理员 zhuobao 创建了租户「y」(slug=x) [tenant#1]"
+    function describeLog(row) {
+      const who = row.actor_is_platform_admin
+        ? '平台管理员 ' + (row.actor_tenant_slug || '?')
+        : '租户 ' + (row.actor_tenant_slug || '?');
+      const tgt = row.target_type
+        ? (row.target_id ? ' [' + row.target_type + '#' + row.target_id + ']' : ' [' + row.target_type + ']')
+        : '';
+      const d = row.details || {};
+      switch (row.action) {
+        case 'create_tenant':
+          return who + ' 创建了租户「' + (d.name || '?') + '」(slug=' + (d.slug || '?') + (d.is_platform_admin ? ', 平台管理员' : '') + ')' + tgt;
+        case 'update_tenant':
+          return who + ' 更新了租户' + tgt + (d.changed_fields ? '，改的字段：' + d.changed_fields.join(', ') : '');
+        case 'delete_tenant':
+          return who + ' 删除了租户「' + (d.name || '?') + '」(slug=' + (d.slug || '?') + ') 及全部数据' + tgt;
+        case 'suspend_tenant':
+          return who + ' 暂停了租户' + tgt + '（阅读端不再展示）';
+        case 'unsuspend_tenant':
+          return who + ' 恢复了租户' + tgt + '（阅读端恢复展示）';
+        case 'login':
+          return who + ' 登录了后台';
+        case 'logout':
+          return who + ' 退出了后台';
+        case 'login_failed':
+          return '登录失败：slug=' + (row.actor_tenant_slug || '?') + '（' + (d.error || '密码错误') + '）';
+        case 'create_magazine':
+          return who + ' 创建了杂志「' + (d.name || '?') + '」' + tgt;
+        case 'update_magazine':
+          return who + ' 更新了杂志' + tgt + (d.changed_fields && d.changed_fields.length ? '，改的字段：' + d.changed_fields.join(', ') : '');
+        case 'delete_magazine':
+          return who + ' 删除了杂志「' + (d.name || '?') + '」' + tgt + '（含全部页面）';
+        case 'add_page':
+          return who + ' 给杂志「' + (d.magazine_name || '?') + '」上传了 1 页' + tgt;
+        case 'add_pages_batch':
+          return who + ' 给杂志「' + (d.magazine_name || '?') + '」批量上传了 ' + (d.count || '?') + ' 页';
+        case 'reorder_pages':
+          return who + ' 重排了杂志「' + (d.magazine_name || '?') + '」的 ' + (d.count || '?') + ' 页顺序';
+        case 'delete_page':
+          return who + ' 删除了杂志「' + (d.magazine_name || '?') + '」的页面 ' + tgt;
+        case 'create_cover':
+          return who + ' 上传了 ' + (d.type || '?') + ' 封面' + (d.magazine_id ? '（杂志 #' + d.magazine_id + '）' : '（全局）') + tgt;
+        case 'delete_cover':
+          return who + ' 删除了 ' + (d.type || '?') + ' 封面' + tgt;
+        case 'upload_file':
+          return who + ' 上传了文件 ' + (d.filename || '?');
+        case 'publish':
+          return who + ' 触发了 publish：把 data 推到了 OSS（' + (d.bytes || '?') + ' bytes，' + (d.counts ? d.counts.tenants + ' 租户 / ' + d.counts.magazines + ' 杂志 / ' + d.counts.pages + ' 页 / ' + d.counts.covers + ' 封面' : '') + '）';
+        default:
+          return who + ' 触发了 ' + (row.action || '?') + tgt;
+      }
+    }
+
+    function renderDetailsHtml(row) {
+      // 默认显示翻译后的人话；点击「原始」可展开 JSON
+      if (!row || (row.details === null || row.details === undefined) && row.action !== 'login_failed') {
+        // login_failed 用 row.actor_tenant_slug 表达，没有 details
+        if (!row || (!row.details && !row.actor_tenant_slug)) {
+          return '<span class="details-empty">—</span>';
+        }
+      }
+      const summary = describeLog(row);
+      const id = 'det_' + Math.random().toString(36).slice(2, 10);
+      // 原始 JSON 也可展开
+      let rawJson = '';
+      try {
+        const raw = row.details === undefined ? { actor_tenant_slug: row.actor_tenant_slug } : row.details;
+        rawJson = JSON.stringify(raw, null, 2);
+      } catch (e) { rawJson = String(row.details || ''); }
+      return '<div class="details-summary" style="font-size:13px;line-height:1.6">' + escapeHtml(summary) + '</div>'
+        + '<button class="details-toggle" data-target="' + id + '" onclick="toggleDetails(\'' + id + '\', this)" style="margin-top:4px">原始 JSON</button>'
+        + '<div class="details-content" id="' + id + '">' + escapeHtml(rawJson) + '</div>';
+    }
+
+    // 详情展开 / 收起
+    function toggleDetails(id, btn) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const willShow = !el.classList.contains('show');
+      el.classList.toggle('show');
+      if (btn) btn.textContent = willShow ? '收起' : '查看';
+    }
+    // 暴露给 inline onclick
+    window.toggleDetails = toggleDetails;
+
+    // ========== API 调用 ==========
+    async function loadTenants() {
+      try {
+        const list = await api.get('/admin/tenants');
+        state.tenantsById = {};
+        (list || []).forEach(function (t) {
+          state.tenantsById[t.id] = {
+            id: t.id,
+            slug: t.slug,
+            name: t.name,
+            is_platform_admin: !!t.is_platform_admin
+          };
+        });
+      } catch (e) {
+        // 403/网络问题：让上层 catch 处理；非致命，不弹 toast
+        console.warn('加载租户列表失败：', e.message);
+        state.tenantsById = {};
+      }
+    }
+
+    async function loadLogs() {
+      if (state.loading) return;
+      state.loading = true;
+      renderContent();
+
+      const params = ['limit=' + state.limit, 'offset=' + state.offset];
+      if (state.tenantFilter) params.push('tenantId=' + encodeURIComponent(state.tenantFilter));
+      if (state.actionFilter) params.push('action=' + encodeURIComponent(state.actionFilter));
+
+      try {
+        const result = await api.get('/admin/audit-logs?' + params.join('&'));
+        state.total = (result && result.total) || 0;
+        state.items = (result && result.items) || [];
+      } catch (e) {
+        state.items = [];
+        state.total = 0;
+        toast('加载审计日志失败：' + e.message, 'error');
+      } finally {
+        state.loading = false;
+        renderContent();
+      }
+    }
+
+    // ========== 渲染 ==========
+    function renderFilterBar() {
+      // 租户下拉
+      const tenants = Object.values(state.tenantsById)
+        .sort(function (a, b) { return a.slug.localeCompare(b.slug); });
+      const tenantOptions = ['<option value="">全部租户</option>']
+        .concat(tenants.map(function (t) {
+          const label = t.slug + (t.is_platform_admin ? ' (平台)' : '');
+          const selected = String(t.id) === String(state.tenantFilter) ? ' selected' : '';
+          return '<option value="' + t.id + '"' + selected + '>' + escapeHtml(label) + '</option>';
+        }))
+        .join('');
+
+      // 动作下拉
+      const actionOptions = ['<option value="">全部动作</option>']
+        .concat(ALL_ACTIONS.map(function (a) {
+          const selected = a === state.actionFilter ? ' selected' : '';
+          return '<option value="' + a + '"' + selected + '>' + escapeHtml(a) + '</option>';
+        }))
+        .join('');
+
+      // 每页条数
+      const pageSizeOptions = [50, 100, 200].map(function (n) {
+        const selected = n === state.limit ? ' selected' : '';
+        return '<option value="' + n + '"' + selected + '>' + n + ' 条/页</option>';
+      }).join('');
+
+      return ''
+        + '<div class="filter-bar">'
+        +   '<div class="form-group">'
+        +     '<label>租户</label>'
+        +     '<select id="fTenant">' + tenantOptions + '</select>'
+        +   '</div>'
+        +   '<div class="form-group">'
+        +     '<label>动作</label>'
+        +     '<select id="fAction">' + actionOptions + '</select>'
+        +   '</div>'
+        +   '<div class="form-group">'
+        +     '<label>每页条数</label>'
+        +     '<select id="fLimit">' + pageSizeOptions + '</select>'
+        +   '</div>'
+        +   '<div class="filter-actions">'
+        +     '<button class="btn btn-primary btn-sm" id="fRefresh">🔄 刷新</button>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    function renderTable() {
+      if (state.items.length === 0) {
+        return '<div class="empty-state" id="emptyState">'
+          + '<div class="empty-icon">📋</div>'
+          + '<p>暂无审计日志</p>'
+          + '</div>';
+      }
+      const rows = state.items.map(function (it) {
+        const tenantSlug = it.tenant_id && state.tenantsById[it.tenant_id]
+          ? state.tenantsById[it.tenant_id].slug
+          : (it.tenant_id ? ('#' + it.tenant_id) : '-');
+        const actorSlug = it.actor_tenant_slug || '-';
+        const actorBadge = it.actor_is_platform_admin
+          ? '<span class="platform-badge" title="平台管理员">P</span>'
+          : '';
+        const cat = actionCategory(it.action);
+        const actionLabel = it.action || '-';
+        const targetText = (it.target_type || '-') + (it.target_id ? ' #' + it.target_id : '');
+        return ''
+          + '<tr>'
+          +   '<td class="col-time mono">' + escapeHtml(formatTimestamp(it.timestamp)) + '</td>'
+          +   '<td>' + escapeHtml(tenantSlug) + '</td>'
+          +   '<td class="col-actor">' + escapeHtml(actorSlug) + actorBadge + '</td>'
+          +   '<td><span class="action-tag ' + cat + '">' + escapeHtml(actionLabel) + '</span></td>'
+          +   '<td class="col-target">' + escapeHtml(targetText) + '</td>'
+          +   '<td class="col-ip mono">' + escapeHtml(it.ip || '-') + '</td>'
+          +   '<td class="col-details">' + renderDetailsHtml(it) + '</td>'
+          + '</tr>';
+      }).join('');
+
+      return ''
+        + '<div class="table-wrap">'
+        +   '<table class="audit-table">'
+        +     '<thead><tr>'
+        +       '<th>时间</th><th>租户</th><th>操作人</th><th>动作</th><th>对象</th><th>IP</th><th>详情</th>'
+        +     '</tr></thead>'
+        +     '<tbody>' + rows + '</tbody>'
+        +   '</table>'
+        + '</div>';
+    }
+
+    function renderPagination() {
+      const start = state.total === 0 ? 0 : (state.offset + 1);
+      const end = Math.min(state.offset + state.items.length, state.total);
+      const prevDisabled = state.offset <= 0 ? 'disabled' : '';
+      const nextDisabled = (state.offset + state.limit) >= state.total ? 'disabled' : '';
+      return ''
+        + '<div class="pagination">'
+        +   '<div class="page-info">共 <b>' + state.total + '</b> 条 · 当前显示 <b>' + start + '-' + end + '</b></div>'
+        +   '<div class="page-buttons">'
+        +     '<button class="btn btn-secondary btn-sm" id="pPrev" ' + prevDisabled + '>‹ 上一页</button>'
+        +     '<button class="btn btn-secondary btn-sm" id="pNext" ' + nextDisabled + '>下一页 ›</button>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    function renderNotice() {
+      return ''
+        + '<div class="audit-notice">'
+        +   '<div class="audit-notice-icon">🔒</div>'
+        +   '<div>'
+        +     '<div class="audit-notice-title">此页面仅平台管理员可见</div>'
+        +     '<div class="audit-notice-body">'
+        +       '审计范围涵盖所有写操作：登录/登出、租户管理、杂志与页面、封面上传、文件上传以及数据发布。'
+        +       '最多保留最近 10000 条日志；登录失败也会记录（actor 为登录尝试的 slug）。'
+        +     '</div>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    function renderContent() {
+      const area = document.getElementById('contentArea');
+      if (state.loading && state.items.length === 0) {
+        area.innerHTML = renderNotice()
+          + '<div class="audit-loading"><div class="spin"></div><div>加载中...</div></div>';
+        return;
+      }
+      area.innerHTML = renderNotice()
+        + renderFilterBar()
+        + renderTable()
+        + renderPagination();
+      bindFilterEvents();
+    }
+
+    function bindFilterEvents() {
+      const fTenant = document.getElementById('fTenant');
+      const fAction = document.getElementById('fAction');
+      const fLimit  = document.getElementById('fLimit');
+      const fRefresh = document.getElementById('fRefresh');
+      const pPrev = document.getElementById('pPrev');
+      const pNext = document.getElementById('pNext');
+
+      if (fTenant) fTenant.addEventListener('change', function () {
+        state.tenantFilter = fTenant.value;
+        state.offset = 0;
+        loadLogs();
+      });
+      if (fAction) fAction.addEventListener('change', function () {
+        state.actionFilter = fAction.value;
+        state.offset = 0;
+        loadLogs();
+      });
+      if (fLimit) fLimit.addEventListener('change', function () {
+        state.limit = Number(fLimit.value) || 100;
+        state.offset = 0;
+        loadLogs();
+      });
+      if (fRefresh) fRefresh.addEventListener('click', function () { loadLogs(); });
+      if (pPrev) pPrev.addEventListener('click', function () {
+        state.offset = Math.max(0, state.offset - state.limit);
+        loadLogs();
+      });
+      if (pNext) pNext.addEventListener('click', function () {
+        if (state.offset + state.limit < state.total) {
+          state.offset = state.offset + state.limit;
+          loadLogs();
+        }
+      });
+    }
+
+    function renderForbidden() {
+      document.getElementById('contentArea').innerHTML = ''
+        + '<div class="forbidden-card">'
+        +   '<div class="icon">🚫</div>'
+        +   '<h2>无权访问</h2>'
+        +   '<p>审计日志仅对 <b>平台管理员</b> 开放。<br>当前租户账号无访问权限，请联系平台管理员。</p>'
+        +   '<div style="margin-top:18px"><a href="/admin/" class="btn btn-secondary btn-sm">返回总览</a></div>'
+        + '</div>';
+    }
+
+    // ========== 启动 ==========
+    (async function init() {
+      const t = await MAG_AUTH.getTenant();
+      if (!t) return;  // 未登录，requireAuth 已经跳走
+
+      // 平台管理员才显示「平台管理」「审计日志」菜单
+      if (t.is_platform_admin) {
+        state.isPlatformAdmin = true;
+        document.querySelectorAll('.platform-only').forEach(function (el) {
+          el.style.display = '';
+        });
+      } else {
+        // 非平台管理员：直接渲染 403 拦截页（API 也会返回 403，这里给出友好提示）
+        renderForbidden();
+        return;
+      }
+
+      try {
+        await loadTenants();
+      } catch (e) { /* 已在 loadTenants 内部吞掉 */ }
+      await loadLogs();
+    })();
+  </script>
+</body>
+</html>

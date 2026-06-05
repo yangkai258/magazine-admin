@@ -1,6 +1,7 @@
-// 鉴权：session-based 密码登录（多租户预留）
-// 现在：单一环境变量 ADMIN_PASSWORD 作为默认租户（zhuobao）的密码
-// 未来：每个 tenant 自己的 password 字段（已预留 verifyTenantPassword）
+// 鉴权：session-based 密码登录（多租户 + 平台管理员）
+// 角色：
+//   - 普通租户：登录后只能看/改自己的杂志
+//   - 平台管理员 (is_platform_admin=true)：能管所有租户、看所有审计日志
 const crypto = require('crypto');
 const db = require('./db/init');
 
@@ -9,7 +10,7 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;  // 24h
 const SESSION_TTL_S = SESSION_TTL_MS / 1000;
 
 // 内存 session store（进程重启会失效，可接受；多实例部署再换 Redis）
-const sessions = new Map();  // sid -> { tenantId, slug, name, expiresAt }
+const sessions = new Map();  // sid -> { tenantId, slug, name, isPlatformAdmin, expiresAt }
 
 function newSid() {
   return crypto.randomBytes(32).toString('hex');
@@ -21,6 +22,7 @@ function createSession(tenant) {
     tenantId: tenant.id,
     slug: tenant.slug,
     name: tenant.name,
+    isPlatformAdmin: !!tenant.is_platform_admin,
     expiresAt: Date.now() + SESSION_TTL_MS
   });
   return sid;
@@ -43,24 +45,67 @@ function getSession(sid) {
   return s;
 }
 
-// 校验密码：优先用 data.json 里 tenant 的 password（多租户时代用），
+// 校验密码：优先用 data.json 里 tenant 的 password（多租户用），
 // fallback 到环境变量 ADMIN_PASSWORD（默认租户 bootstrap）
 function checkPassword(tenant, providedPassword) {
   if (!tenant || !providedPassword) return false;
   if (tenant.password && tenant.password === providedPassword) return true;
-  // fallback 到环境变量
   const envPwd = process.env.ADMIN_PASSWORD;
   if (envPwd && envPwd === providedPassword) return true;
   return false;
 }
 
-// 登录：找 tenant by slug，校验 password
-function login(slug, password) {
+// 登录：找 tenant by slug，校验 password，写 audit log
+function login(slug, password, req) {
   const tenant = db.getTenantBySlug(slug);
   if (!tenant) return { ok: false, error: '租户不存在' };
-  if (!checkPassword(tenant, password)) return { ok: false, error: '密码错误' };
+  if (tenant.suspended) return { ok: false, error: '租户已暂停，请联系平台管理员' };
+  if (!checkPassword(tenant, password)) {
+    // 失败也记 audit log（方便追查暴力破解）
+    db.addAuditLog({
+      actor_tenant_slug: slug,
+      tenant_id: tenant.id,
+      action: 'login_failed',
+      ip: req ? req.ip : null,
+      user_agent: req ? (req.headers && req.headers['user-agent']) : null
+    });
+    return { ok: false, error: '密码错误' };
+  }
   const sid = createSession(tenant);
-  return { ok: true, sid, tenant: { id: tenant.id, slug: tenant.slug, name: tenant.name } };
+  db.addAuditLog({
+    actor_tenant_id: tenant.id,
+    actor_tenant_slug: tenant.slug,
+    actor_is_platform_admin: !!tenant.is_platform_admin,
+    tenant_id: tenant.id,
+    action: 'login',
+    ip: req ? req.ip : null,
+    user_agent: req ? (req.headers && req.headers['user-agent']) : null
+  });
+  return {
+    ok: true,
+    sid,
+    tenant: {
+      id: tenant.id,
+      slug: tenant.slug,
+      name: tenant.name,
+      is_platform_admin: !!tenant.is_platform_admin
+    }
+  };
+}
+
+function logout(req) {
+  if (req && req.session) {
+    db.addAuditLog({
+      actor_tenant_id: req.session.tenantId,
+      actor_tenant_slug: req.session.slug,
+      actor_is_platform_admin: !!req.session.isPlatformAdmin,
+      tenant_id: req.session.tenantId,
+      action: 'logout',
+      ip: req.ip,
+      user_agent: req.headers && req.headers['user-agent']
+    });
+  }
+  if (req && req.sid) destroySession(req.sid);
 }
 
 // 清理过期 session（每小时跑一次）
@@ -101,7 +146,12 @@ function attachSession(req, res, next) {
   const sid = cookies[COOKIE_NAME];
   const session = getSession(sid);
   req.session = session;
-  req.tenant = session ? { id: session.tenantId, slug: session.slug, name: session.name } : null;
+  req.tenant = session ? {
+    id: session.tenantId,
+    slug: session.slug,
+    name: session.name,
+    is_platform_admin: !!session.isPlatformAdmin
+  } : null;
   req.sid = sid || null;
   next();
 }
@@ -114,8 +164,20 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// 强制平台管理员：未登录 或 不是 platform admin 都 403
+function requirePlatformAdmin(req, res, next) {
+  if (!req.session) {
+    return res.status(401).json({ error: '未登录', code: 'AUTH_REQUIRED' });
+  }
+  if (!req.session.isPlatformAdmin) {
+    return res.status(403).json({ error: '需要平台管理员权限', code: 'PLATFORM_ADMIN_REQUIRED' });
+  }
+  next();
+}
+
 module.exports = {
   COOKIE_NAME, SESSION_TTL_S,
-  login, destroySession, getSession, checkPassword,
-  attachSession, requireAuth, setSessionCookie, clearSessionCookie
+  login, logout, destroySession, getSession, checkPassword,
+  attachSession, requireAuth, requirePlatformAdmin,
+  setSessionCookie, clearSessionCookie
 };

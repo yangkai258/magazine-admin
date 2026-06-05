@@ -677,11 +677,116 @@
       "id": 1,
       "slug": "zhuobao",
       "name": "卓宝人",
-      "created_at": "2026-06-05T04:14:22.292Z"
+      "created_at": "2026-06-05T04:14:22.292Z",
+      "is_platform_admin": true,
+      "suspended": false
+    },
+    {
+      "id": 2,
+      "slug": "vsfdvs",
+      "name": "1",
+      "password": "1",
+      "is_platform_admin": false,
+      "suspended": false,
+      "created_at": "2026-06-05T08:07:59.286Z"
     }
   ],
   "_meta": {
-    "schema_version": 2,
-    "migrated_at": "2026-06-05T04:14:22.293Z"
-  }
+    "schema_version": 3,
+    "migrated_at": "2026-06-05T07:36:28.814Z"
+  },
+  "audit_log": [
+    {
+      "id": 1,
+      "timestamp": "2026-06-05T08:00:16.872Z",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "tenant_id": 1,
+      "action": "login",
+      "target_type": null,
+      "target_id": null,
+      "details": null,
+      "ip": "::ffff:172.16.120.79",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    {
+      "id": 2,
+      "timestamp": "2026-06-05T08:07:59.288Z",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "tenant_id": 2,
+      "action": "create_tenant",
+      "target_type": "tenant",
+      "target_id": 2,
+      "details": {
+        "slug": "vsfdvs",
+        "name": "1",
+        "is_platform_admin": false
+      },
+      "ip": "::ffff:172.16.120.79",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    {
+      "id": 3,
+      "timestamp": "2026-06-05T08:14:13.466Z",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "tenant_id": 1,
+      "action": "update_tenant",
+      "target_type": "tenant",
+      "target_id": 2,
+      "details": [
+        "name",
+        "password",
+        "is_platform_admin"
+      ],
+      "ip": "::ffff:172.16.120.79",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    {
+      "id": 4,
+      "timestamp": "2026-06-05T08:14:16.602Z",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "tenant_id": 1,
+      "action": "logout",
+      "target_type": null,
+      "target_id": null,
+      "details": null,
+      "ip": "::ffff:172.16.120.79",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    {
+      "id": 5,
+      "timestamp": "2026-06-05T08:14:25.709Z",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "tenant_id": 1,
+      "action": "login",
+      "target_type": null,
+      "target_id": null,
+      "details": null,
+      "ip": "::ffff:172.16.120.79",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    {
+      "id": 6,
+      "timestamp": "2026-06-05T08:32:47.811Z",
+      "actor_tenant_id": 2,
+      "actor_tenant_slug": "vsfdvs",
+      "actor_is_platform_admin": false,
+      "tenant_id": 2,
+      "action": "login",
+      "target_type": null,
+      "target_id": null,
+      "details": null,
+      "ip": "::ffff:172.16.120.79",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    }
+  ]
 }

@@ -22,6 +22,12 @@
         <a href="/admin/cover/list.html" class="nav-item" data-page="cover">
           <span class="nav-icon">🖼</span> 封面管理
         </a>
+        <a href="/admin/platform.html" class="nav-item platform-only" data-page="platform" style="display:none">
+          <span class="nav-icon">🏢</span> 平台管理
+        </a>
+        <a href="/admin/audit.html" class="nav-item platform-only" data-page="audit" style="display:none">
+          <span class="nav-icon">📋</span> 审计日志
+        </a>
       </nav>
     </aside>
     <main class="main-content">
@@ -72,6 +78,13 @@
   </div>
   <script src="/admin/js/api.js"></script>
   <script>
+    // 平台管理员才显示「平台管理」「审计日志」菜单
+    MAG_AUTH.getTenant().then(function(t) {
+      if (t && t.is_platform_admin) {
+        document.querySelectorAll('.platform-only').forEach(function(el) { el.style.display = ''; });
+      }
+    });
+
     (async function() {
       try {
         const [magazines, covers] = await Promise.all([
