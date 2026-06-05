@@ -1,0 +1,16 @@
+# nodemon 配置
+# dev = `npm run dev`，改 server/ 下的 .js 自动重启 node
+# data.json 改了不用重启（init.js 里有 fs.watchFile 热重载）
+# uploads/ 改了不用重启（只是静态文件目录）
+watch:
+  - server
+ignore:
+  - server/db/data.json
+  - uploads/*
+  - node_modules/*
+  - .env
+ext:
+  - js
+  - json
+delay: 300
+verbose: true
