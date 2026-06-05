@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>接受邀请 · 杂志管理平台</title>
+  <link rel="stylesheet" href="/admin/css/style.css">
+  <style>
+    /* ========== 页面级 scope ========== */
+    .invite-page {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 50%, #faf5ff 100%);
+      display: flex; flex-direction: column;
+    }
+    .invite-topbar {
+      height: var(--top-h);
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .invite-topbar-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 15px; font-weight: 700; color: var(--text);
+    }
+    .invite-topbar-logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--primary), #7c3aed);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 18px;
+    }
+    .invite-topbar-crumb {
+      margin-left: 12px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .invite-topbar-crumb b { color: var(--primary); font-weight: 600; }
+    .invite-topbar-back {
+      margin-left: auto;
+      font-size: 13px;
+      color: var(--primary);
+      text-decoration: none;
+    }
+    .invite-topbar-back:hover { text-decoration: underline; }
+
+    .invite-wrap {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+
+    /* ========== 卡片通用 ========== */
+    .invite-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(79, 70, 229, 0.12);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 440px;
+    }
+    .invite-card h2 {
+      font-size: 20px; font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+      text-align: center;
+    }
+    .invite-card .invite-sub {
+      text-align: center;
+      font-size: 13px; color: var(--text-secondary);
+      margin-bottom: 24px;
+      line-height: 1.7;
+    }
+    .invite-card .invite-tenant-chip {
+      display: inline-block;
+      background: #eef2ff; color: var(--primary);
+      font-size: 12px; font-weight: 600;
+      padding: 3px 10px; border-radius: 12px;
+      margin: 0 4px;
+    }
+    .invite-card .invite-role-chip {
+      display: inline-block;
+      background: #fef3c7; color: #92400e;
+      font-size: 12px; font-weight: 600;
+      padding: 3px 10px; border-radius: 12px;
+      margin: 0 4px;
+    }
+    .invite-card .invite-role-chip.owner { background: #ede9fe; color: #6d28d9; }
+    .invite-card .invite-role-chip.editor { background: #dbeafe; color: #1e40af; }
+    .invite-card .invite-role-chip.viewer { background: #f3f4f6; color: var(--text-secondary); }
+
+    .invite-form { display: flex; flex-direction: column; gap: 16px; }
+    .invite-form .form-group { gap: 8px; }
+    .invite-form label { font-size: 13px; font-weight: 500; color: var(--text); }
+    .invite-form input {
+      padding: 11px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      background: #fff;
+    }
+    .invite-form input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+    }
+    .invite-form .form-hint {
+      font-size: 12px; color: var(--text-secondary);
+      margin-top: -2px;
+    }
+    .invite-submit {
+      width: 100%; padding: 12px 16px;
+      background: var(--primary); color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.05s;
+      margin-top: 4px;
+    }
+    .invite-submit:hover { background: var(--primary-hover); }
+    .invite-submit:active { transform: translateY(1px); }
+    .invite-submit:disabled { background: #a5b4fc; cursor: not-allowed; transform: none; }
+
+    .invite-error {
+      background: #fee2e2; color: #991b1b;
+      border: 1px solid #fecaca;
+      border-radius: 6px; padding: 10px 12px;
+      font-size: 13px;
+      display: none;
+    }
+    .invite-error.show { display: block; }
+
+    .invite-foot {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 22px;
+    }
+
+    /* ========== 加载 / 错误 / 成功状态 ========== */
+    .invite-status-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(79, 70, 229, 0.12);
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 440px;
+      text-align: center;
+    }
+    .invite-status-icon { font-size: 56px; margin-bottom: 12px; }
+    .invite-status-card h2 { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    .invite-status-card p  { font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+    .invite-success-card {
+      background: var(--card-bg);
+      border: 2px solid #bbf7d0;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(34, 197, 94, 0.12);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 440px;
+      text-align: center;
+    }
+    .invite-success-card h2 { font-size: 20px; font-weight: 700; color: #166534; margin-bottom: 8px; }
+    .invite-success-card p  { font-size: 13px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 18px; }
+    .btn-primary {
+      display: inline-block;
+      padding: 12px 28px;
+      background: var(--primary); color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 15px; font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+
+    /* ========== Responsive ========== */
+    @media (max-width: 768px) {
+      .invite-card, .invite-status-card, .invite-success-card { padding: 28px 20px; }
+      .invite-topbar-crumb { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="invite-page">
+    <header class="invite-topbar">
+      <div class="invite-topbar-logo">
+        <span class="invite-topbar-logo-icon">📚</span>
+        <span>杂志管理平台</span>
+      </div>
+      <div class="invite-topbar-crumb">/ <b>接受邀请</b></div>
+      <a class="invite-topbar-back" href="/admin/login.html">← 返回登录</a>
+    </header>
+
+    <div class="invite-wrap">
+      <!-- 表单（拿到 token 就展示） -->
+      <div class="invite-card" id="formCard">
+        <h2>接受邀请 ✉️</h2>
+        <p class="invite-sub" id="inviteSub">你被邀请加入一个租户，请填写姓名和密码完成注册</p>
+
+        <div class="invite-error" id="formError"></div>
+
+        <form class="invite-form" id="acceptForm" autocomplete="off">
+          <div class="form-group">
+            <label for="inviteName">姓名<span style="color:#ef4444">*</span></label>
+            <input
+              type="text"
+              id="inviteName"
+              name="name"
+              placeholder="你的姓名"
+              maxlength="32"
+              required
+            >
+            <div class="form-hint">显示在管理后台的称呼，可以是中文名、昵称、英文名</div>
+          </div>
+          <div class="form-group">
+            <label for="invitePassword">设置密码<span style="color:#ef4444">*</span></label>
+            <input
+              type="password"
+              id="invitePassword"
+              name="password"
+              placeholder="至少 6 位"
+              minlength="6"
+              autocomplete="new-password"
+              required
+            >
+            <div class="form-hint">至少 6 位，建议字母 + 数字。邮箱沿用邀请时的邮箱，不可修改。</div>
+          </div>
+          <button type="submit" class="invite-submit" id="acceptSubmit">接受邀请</button>
+        </form>
+
+        <p class="invite-foot">已有账号？<a href="/admin/login.html" style="color:var(--primary);text-decoration:none">直接登录</a></p>
+      </div>
+
+      <!-- 成功 -->
+      <div class="invite-success-card" id="successCard" style="display:none">
+        <div class="invite-status-icon">✅</div>
+        <h2>邀请接受成功！</h2>
+        <p>你的账号已创建。现在可以用邀请邮件中的邮箱和刚设置的密码登录 <span class="invite-tenant-chip" id="successTenant">该租户</span></p>
+        <a class="btn-primary" id="loginBtn" href="/admin/login.html">立即登录</a>
+      </div>
+
+      <!-- 错误（没有 token 时） -->
+      <div class="invite-status-card" id="errorCard" style="display:none">
+        <div class="invite-status-icon">❌</div>
+        <h2>邀请链接无效</h2>
+        <p id="errorMessage">链接无效或已过期</p>
+        <p style="margin-top:18px"><a class="btn-primary" href="/admin/login.html">返回登录</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var formCard = document.getElementById('formCard');
+      var successCard = document.getElementById('successCard');
+      var errorCard = document.getElementById('errorCard');
+      var errorMessage = document.getElementById('errorMessage');
+      var formError = document.getElementById('formError');
+      var acceptForm = document.getElementById('acceptForm');
+      var acceptSubmit = document.getElementById('acceptSubmit');
+
+      function showError(msg) {
+        formCard.style.display = 'none';
+        successCard.style.display = 'none';
+        errorMessage.textContent = msg || '链接无效或已过期';
+        errorCard.style.display = '';
+      }
+      function showSuccess(data) {
+        formCard.style.display = 'none';
+        errorCard.style.display = 'none';
+        if (data.tenant_slug) {
+          document.getElementById('successTenant').textContent = data.tenant_slug;
+          document.getElementById('loginBtn').href = '/admin/login.html?t=' + encodeURIComponent(data.tenant_slug);
+        }
+        successCard.style.display = '';
+      }
+      function showFormError(msg) {
+        formError.textContent = msg;
+        formError.classList.add('show');
+        formError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      function clearFormError() {
+        formError.textContent = '';
+        formError.classList.remove('show');
+      }
+
+      // 从 URL 拿 token
+      var params = new URLSearchParams(location.search);
+      var token = params.get('token');
+      if (!token) { showError('缺少 token 参数。请使用邮件中的完整邀请链接。'); return; }
+
+      // 可选：从 query 拿 tenant/role 用来展示更友好的子标题（不依赖后端接口）
+      var tenant = params.get('tenant') || params.get('tenant_name');
+      var role = params.get('role');
+      if (tenant || role) {
+        var html = '你被邀请加入';
+        if (tenant) html += '<span class="invite-tenant-chip">' + escapeHtml(tenant) + '</span>';
+        if (role) html += '（角色：<span class="invite-role-chip ' + escapeAttr(role) + '">' + escapeHtml(role) + '</span>）';
+        html += '，请填写姓名和密码完成注册';
+        document.getElementById('inviteSub').innerHTML = html;
+      }
+
+      // 预填 name 建议值（如果没有显式值）：用 url 里 ?name= 或 email 前缀（如果有 ?email=），否则空
+      var presetName = params.get('name') || '';
+      if (!presetName) {
+        var presetEmail = params.get('email') || '';
+        if (presetEmail) {
+          presetName = presetEmail.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+        }
+      }
+      if (presetName) document.getElementById('inviteName').value = presetName;
+
+      // 提交邀请
+      acceptForm.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        clearFormError();
+        var name = (document.getElementById('inviteName').value || '').trim();
+        var password = document.getElementById('invitePassword').value || '';
+        if (!name) { showFormError('请填写姓名'); return; }
+        if (password.length < 6) { showFormError('密码至少 6 位'); return; }
+
+        acceptSubmit.disabled = true;
+        var originalText = acceptSubmit.textContent;
+        acceptSubmit.textContent = '提交中…';
+
+        fetch('/api/auth/accept-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token, name: name, password: password })
+        })
+          .then(function (res) {
+            return res.json().then(function (body) { return { ok: res.ok, status: res.status, body: body }; });
+          })
+          .then(function (result) {
+            if (result.ok && result.body && result.body.success) {
+              showSuccess(result.body);
+              return;
+            }
+            var msg = (result.body && result.body.error) ? result.body.error : ('接受失败 (HTTP ' + result.status + ')');
+            showFormError(msg);
+            acceptSubmit.disabled = false;
+            acceptSubmit.textContent = originalText;
+          })
+          .catch(function (err) {
+            showFormError('网络错误：' + (err && err.message ? err.message : '请稍后重试'));
+            acceptSubmit.disabled = false;
+            acceptSubmit.textContent = originalText;
+          });
+      });
+
+      function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+        });
+      }
+      function escapeAttr(s) { return escapeHtml(s); }
+    })();
+  </script>
+</body>
+</html>

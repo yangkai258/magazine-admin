@@ -138,7 +138,12 @@ function attachSession(req, res, next) {
     id: session.tenantId,
     slug: session.tenantSlug,
     name: session.tenantName,
-    is_platform_admin: !!session.isPlatformAdmin
+    is_platform_admin: !!session.isPlatformAdmin,
+    // 品牌：session 在 login 时已写入（createSession 第 27-28 行），这里透出到 /api/auth/me
+    // 注意：session 是 login 时缓存的，用户改品牌后需重新登录才能从 /me 拿到新值。
+    // 客户端如需拿最新值，应改调 GET /api/admin/branding（不依赖 session 缓存）。
+    logo_url: session.tenantLogo || '',
+    primary_color: session.tenantPrimaryColor || '#4f46e5'
   } : null;
   req.user = session ? {
     id: session.userId,

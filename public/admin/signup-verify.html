@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>邮箱验证 · 杂志管理平台</title>
+  <link rel="stylesheet" href="/admin/css/style.css">
+  <style>
+    /* ========== 页面级 scope ========== */
+    .verify-page {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 50%, #faf5ff 100%);
+      display: flex; flex-direction: column;
+    }
+    .verify-topbar {
+      height: var(--top-h);
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .verify-topbar-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 15px; font-weight: 700; color: var(--text);
+    }
+    .verify-topbar-logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--primary), #7c3aed);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 18px;
+    }
+    .verify-topbar-crumb {
+      margin-left: 12px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .verify-topbar-crumb b { color: var(--primary); font-weight: 600; }
+    .verify-topbar-back {
+      margin-left: auto;
+      font-size: 13px;
+      color: var(--primary);
+      text-decoration: none;
+    }
+    .verify-topbar-back:hover { text-decoration: underline; }
+
+    .verify-wrap {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+
+    /* ========== 加载 / 状态 ========== */
+    .verify-status {
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(79, 70, 229, 0.12);
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 520px;
+      text-align: center;
+    }
+    .verify-status-icon { font-size: 56px; margin-bottom: 12px; }
+    .verify-status h2 { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    .verify-status p  { font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+
+    /* ========== 成功结果卡 ========== */
+    .verify-success {
+      background: var(--card-bg);
+      border: 2px solid #bbf7d0;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(34, 197, 94, 0.12);
+      padding: 36px 40px;
+      width: 100%;
+      max-width: 520px;
+    }
+    .verify-success-head {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .verify-success-head .verify-success-icon { font-size: 48px; margin-bottom: 8px; }
+    .verify-success-head h2 {
+      font-size: 20px; font-weight: 700;
+      color: #166534; margin-bottom: 6px;
+    }
+    .verify-success-head p {
+      font-size: 13px; color: var(--text-secondary);
+      line-height: 1.7;
+    }
+    .verify-success-info {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 16px 0;
+    }
+    .verify-success-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 0;
+      font-size: 13px;
+    }
+    .verify-success-row .label { color: var(--text-secondary); }
+    .verify-success-row .value {
+      color: var(--text); font-weight: 600;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    }
+    .verify-success-pwd {
+      margin: 16px 0;
+      padding: 18px 20px;
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border: 1px solid #fcd34d;
+      border-radius: 8px;
+    }
+    .verify-success-pwd-label {
+      font-size: 12px; font-weight: 600;
+      color: #92400e; margin-bottom: 6px;
+    }
+    .verify-success-pwd-val {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+      font-size: 18px; font-weight: 700;
+      color: #78350f;
+      letter-spacing: 1px;
+      user-select: all;
+      word-break: break-all;
+    }
+    .verify-success-pwd-tip {
+      font-size: 12px; color: #92400e;
+      margin-top: 8px; line-height: 1.6;
+    }
+    .copy-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px;
+      background: #fff; border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px; cursor: pointer;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .copy-btn:hover { background: #f3f4f6; border-color: var(--primary); color: var(--primary); }
+    .copy-btn.copied { background: #dcfce7; border-color: var(--success); color: #166534; }
+
+    .verify-success-actions {
+      margin-top: 20px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .btn-primary {
+      display: block; text-align: center;
+      width: 100%; padding: 12px 16px;
+      background: var(--primary); color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 15px; font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+
+    /* ========== 错误卡 ========== */
+    .verify-error {
+      background: var(--card-bg);
+      border: 2px solid #fecaca;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(239, 68, 68, 0.10);
+      padding: 36px 40px;
+      width: 100%;
+      max-width: 520px;
+      text-align: center;
+    }
+    .verify-error-icon { font-size: 56px; margin-bottom: 12px; }
+    .verify-error h2 {
+      font-size: 20px; font-weight: 700;
+      color: #991b1b; margin-bottom: 8px;
+    }
+    .verify-error p {
+      font-size: 13px; color: var(--text-secondary);
+      line-height: 1.7; margin-bottom: 18px;
+    }
+    .verify-error-actions {
+      display: flex; gap: 10px; justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn-secondary {
+      display: inline-block; text-align: center;
+      padding: 10px 18px;
+      background: #f3f4f6; color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px; font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-secondary:hover { background: #e5e7eb; }
+
+    /* ========== Responsive ========== */
+    @media (max-width: 768px) {
+      .verify-status, .verify-success, .verify-error { padding: 28px 20px; }
+      .verify-topbar-crumb { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="verify-page">
+    <header class="verify-topbar">
+      <div class="verify-topbar-logo">
+        <span class="verify-topbar-logo-icon">📚</span>
+        <span>杂志管理平台</span>
+      </div>
+      <div class="verify-topbar-crumb">/ <b>邮箱验证</b></div>
+      <a class="verify-topbar-back" href="/admin/login.html">← 返回登录</a>
+    </header>
+
+    <div class="verify-wrap">
+      <!-- 加载中（默认） -->
+      <div class="verify-status" id="statusCard">
+        <div class="verify-status-icon">⏳</div>
+        <h2>正在验证你的邮箱…</h2>
+        <p>请稍候</p>
+      </div>
+
+      <!-- 成功（验证完成后展示） -->
+      <div class="verify-success" id="successCard" style="display:none">
+        <div class="verify-success-head">
+          <div class="verify-success-icon">🎉</div>
+          <h2>租户开通成功！</h2>
+          <p>请用下方账号信息登录后台，<br>登录后请立即修改密码。</p>
+        </div>
+
+        <div class="verify-success-info">
+          <div class="verify-success-row">
+            <span class="label">租户标识</span>
+            <span class="value" id="successSlug">--</span>
+          </div>
+          <div class="verify-success-row">
+            <span class="label">租户显示名</span>
+            <span class="value" id="successName" style="font-family:inherit">--</span>
+          </div>
+          <div class="verify-success-row">
+            <span class="label">登录邮箱</span>
+            <span class="value" id="successEmail">--</span>
+          </div>
+        </div>
+
+        <div class="verify-success-pwd">
+          <div class="verify-success-pwd-label">🔑 初始密码（请复制，登录后立即修改）</div>
+          <div class="verify-success-pwd-val" id="successPassword">--</div>
+          <div style="text-align:right;margin-top:8px">
+            <button type="button" class="copy-btn" id="copyPwdBtn">复制密码</button>
+          </div>
+          <div class="verify-success-pwd-tip">⚠️ 初始密码仅显示一次，请妥善保存或立即修改。</div>
+        </div>
+
+        <div class="verify-success-actions">
+          <a class="btn-primary" id="loginBtn" href="/admin/login.html">立即登录</a>
+        </div>
+      </div>
+
+      <!-- 错误 -->
+      <div class="verify-error" id="errorCard" style="display:none">
+        <div class="verify-error-icon">❌</div>
+        <h2>验证失败</h2>
+        <p id="errorMessage">链接无效或已过期</p>
+        <div class="verify-error-actions">
+          <a class="btn-secondary" href="/admin/signup.html">重新注册</a>
+          <a class="btn-secondary" href="/admin/login.html">返回登录</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var statusCard = document.getElementById('statusCard');
+      var successCard = document.getElementById('successCard');
+      var errorCard = document.getElementById('errorCard');
+      var errorMessage = document.getElementById('errorMessage');
+
+      function showStatus() {
+        statusCard.style.display = '';
+        successCard.style.display = 'none';
+        errorCard.style.display = 'none';
+      }
+      function showSuccess(data) {
+        statusCard.style.display = 'none';
+        errorCard.style.display = 'none';
+        document.getElementById('successSlug').textContent = data.tenant_slug || '--';
+        document.getElementById('successName').textContent = data.tenant_name || '--';
+        document.getElementById('successEmail').textContent = data.user_email || '--';
+        document.getElementById('successPassword').textContent = data.initial_password || '--';
+        // 登录按钮带上 slug 自动预填
+        var loginBtn = document.getElementById('loginBtn');
+        if (data.tenant_slug) {
+          loginBtn.href = '/admin/login.html?t=' + encodeURIComponent(data.tenant_slug);
+        }
+        successCard.style.display = '';
+      }
+      function showError(msg) {
+        statusCard.style.display = 'none';
+        successCard.style.display = 'none';
+        errorMessage.textContent = msg || '链接无效或已过期';
+        errorCard.style.display = '';
+      }
+
+      // 从 URL 拿 token
+      var params = new URLSearchParams(location.search);
+      var token = params.get('token');
+
+      if (!token) {
+        showError('缺少 token 参数。请使用邮件中的完整链接。');
+        return;
+      }
+
+      // 调用 verify API
+      fetch('/api/public/signup/verify?token=' + encodeURIComponent(token), { credentials: 'omit' })
+        .then(function (res) {
+          return res.json().then(function (body) { return { ok: res.ok, status: res.status, body: body }; });
+        })
+        .then(function (result) {
+          if (result.ok && result.body && result.body.success) {
+            showSuccess(result.body);
+          } else {
+            showError((result.body && result.body.error) ? result.body.error : ('验证失败 (HTTP ' + result.status + ')'));
+          }
+        })
+        .catch(function (err) {
+          showError('网络错误：' + (err && err.message ? err.message : '请稍后重试'));
+        });
+
+      // 复制密码
+      var copyBtn = document.getElementById('copyPwdBtn');
+      copyBtn.addEventListener('click', function () {
+        var text = document.getElementById('successPassword').textContent || '';
+        if (!navigator.clipboard) {
+          var range = document.createRange();
+          range.selectNode(document.getElementById('successPassword'));
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+          return;
+        }
+        navigator.clipboard.writeText(text).then(function () {
+          copyBtn.textContent = '✓ 已复制';
+          copyBtn.classList.add('copied');
+          setTimeout(function () {
+            copyBtn.textContent = '复制密码';
+            copyBtn.classList.remove('copied');
+          }, 1800);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

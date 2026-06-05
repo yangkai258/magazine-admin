@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自助注册 · 杂志管理平台</title>
+  <link rel="stylesheet" href="/admin/css/style.css">
+  <style>
+    /* ========== 页面级 scope（不污染共享 style.css） ========== */
+    .signup-page {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 50%, #faf5ff 100%);
+      display: flex; flex-direction: column;
+    }
+    .signup-topbar {
+      height: var(--top-h);
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .signup-topbar-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 15px; font-weight: 700; color: var(--text);
+    }
+    .signup-topbar-logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--primary), #7c3aed);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 18px;
+    }
+    .signup-topbar-crumb {
+      margin-left: 12px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .signup-topbar-crumb b { color: var(--primary); font-weight: 600; }
+    .signup-topbar-back {
+      margin-left: auto;
+      font-size: 13px;
+      color: var(--primary);
+      text-decoration: none;
+    }
+    .signup-topbar-back:hover { text-decoration: underline; }
+
+    .signup-wrap {
+      flex: 1;
+      padding: 32px 24px 60px;
+    }
+    .signup-container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .signup-hero {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .signup-hero h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .signup-hero p {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    /* ========== 套餐卡片 ========== */
+    .plan-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+    .plan-card {
+      background: var(--card-bg);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 24px 22px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      display: flex; flex-direction: column;
+    }
+    .plan-card:hover {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(79,70,229,0.10);
+    }
+    .plan-card.selected {
+      border-color: var(--primary);
+      box-shadow: 0 8px 24px rgba(79,70,229,0.18);
+      background: linear-gradient(180deg, #f5f3ff 0%, #ffffff 60%);
+    }
+    .plan-card-badge {
+      position: absolute;
+      top: -10px; right: 16px;
+      background: var(--primary); color: #fff;
+      font-size: 11px; font-weight: 600;
+      padding: 3px 10px; border-radius: 10px;
+    }
+    .plan-card-name {
+      font-size: 16px; font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .plan-card-price {
+      display: flex; align-items: baseline; gap: 4px;
+      margin-bottom: 14px;
+    }
+    .plan-card-price-num {
+      font-size: 28px; font-weight: 700;
+      color: var(--primary);
+    }
+    .plan-card-price-unit {
+      font-size: 13px; color: var(--text-secondary);
+    }
+    .plan-card-features {
+      list-style: none; padding: 0; margin: 0;
+      font-size: 13px; color: var(--text);
+      flex: 1;
+    }
+    .plan-card-features li {
+      padding: 6px 0;
+      border-bottom: 1px dashed #f1f5f9;
+      display: flex; align-items: flex-start; gap: 8px;
+    }
+    .plan-card-features li:last-child { border-bottom: none; }
+    .plan-card-features li::before {
+      content: "✓"; color: var(--success); font-weight: 700; flex: none;
+    }
+    .plan-card-empty {
+      text-align: center; padding: 40px;
+      color: var(--text-secondary);
+    }
+
+    /* ========== 注册表单 ========== */
+    .signup-form-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(79, 70, 229, 0.10);
+      padding: 32px 36px;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    .signup-form-card h2 {
+      font-size: 18px; font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .signup-form-card .signup-form-sub {
+      font-size: 13px; color: var(--text-secondary);
+      margin-bottom: 22px;
+    }
+    .signup-form-card .selected-plan-chip {
+      display: inline-block;
+      background: #eef2ff; color: var(--primary);
+      font-size: 12px; font-weight: 600;
+      padding: 4px 10px; border-radius: 12px;
+      margin-left: 8px;
+    }
+    .signup-form { display: flex; flex-direction: column; gap: 16px; }
+    .signup-form .form-group { gap: 8px; }
+    .signup-form label { font-size: 13px; font-weight: 500; color: var(--text); }
+    .signup-form input {
+      padding: 11px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      background: #fff;
+    }
+    .signup-form input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+    }
+    .signup-form .form-hint {
+      font-size: 12px; color: var(--text-secondary);
+      margin-top: -2px;
+    }
+    .signup-submit {
+      width: 100%; padding: 12px 16px;
+      background: var(--primary); color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.05s;
+      margin-top: 4px;
+    }
+    .signup-submit:hover { background: var(--primary-hover); }
+    .signup-submit:active { transform: translateY(1px); }
+    .signup-submit:disabled { background: #a5b4fc; cursor: not-allowed; transform: none; }
+
+    .signup-error {
+      background: #fee2e2; color: #991b1b;
+      border: 1px solid #fecaca;
+      border-radius: 6px; padding: 10px 12px;
+      font-size: 13px;
+      display: none;
+    }
+    .signup-error.show { display: block; }
+
+    /* ========== 成功页（提交后展示） ========== */
+    .signup-success {
+      background: var(--card-bg);
+      border: 2px solid #bbf7d0;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(34, 197, 94, 0.12);
+      padding: 36px 40px;
+      max-width: 560px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .signup-success-icon {
+      font-size: 56px;
+      margin-bottom: 12px;
+    }
+    .signup-success h2 {
+      font-size: 20px; font-weight: 700;
+      color: #166534;
+      margin-bottom: 8px;
+    }
+    .signup-success p {
+      font-size: 14px; color: var(--text);
+      line-height: 1.7;
+      margin-bottom: 18px;
+    }
+    .signup-success-verify {
+      background: #f0fdf4;
+      border: 1px dashed #86efac;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 16px 0;
+      text-align: left;
+    }
+    .signup-success-verify-label {
+      font-size: 12px; font-weight: 600;
+      color: #166534; margin-bottom: 6px;
+    }
+    .signup-success-verify-link {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+      font-size: 12px;
+      color: var(--primary);
+      word-break: break-all;
+      user-select: all;
+    }
+    .signup-success-foot {
+      font-size: 12px; color: var(--text-secondary);
+      margin-top: 14px;
+    }
+    .copy-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px;
+      background: #fff; border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px; cursor: pointer;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .copy-btn:hover { background: #f3f4f6; border-color: var(--primary); color: var(--primary); }
+    .copy-btn.copied { background: #dcfce7; border-color: var(--success); color: #166534; }
+
+    .signup-foot {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 22px;
+    }
+    .signup-foot a { color: var(--primary); text-decoration: none; }
+    .signup-foot a:hover { text-decoration: underline; }
+
+    /* ========== Responsive ========== */
+    @media (max-width: 768px) {
+      .plan-grid { grid-template-columns: 1fr; }
+      .signup-form-card, .signup-success { padding: 24px 20px; }
+      .signup-hero h1 { font-size: 20px; }
+      .signup-topbar-crumb { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="signup-page">
+    <header class="signup-topbar">
+      <div class="signup-topbar-logo">
+        <span class="signup-topbar-logo-icon">📚</span>
+        <span>杂志管理平台</span>
+      </div>
+      <div class="signup-topbar-crumb">/ <b>自助注册</b></div>
+      <a class="signup-topbar-back" href="/admin/login.html">← 返回登录</a>
+    </header>
+
+    <div class="signup-wrap">
+      <div class="signup-container">
+        <div class="signup-hero">
+          <h1>开通你的杂志管理后台</h1>
+          <p>选套餐 → 填信息 → 查邮箱验证 → 立即登录开始使用</p>
+        </div>
+
+        <!-- 步骤 1：选套餐 -->
+        <div class="plan-grid" id="planGrid">
+          <div class="plan-card-empty">套餐加载中…</div>
+        </div>
+
+        <!-- 步骤 2：填信息（默认隐藏） -->
+        <div class="signup-form-card" id="formCard" style="display:none">
+          <h2>填写租户信息<span class="selected-plan-chip" id="selectedPlanChip"></span></h2>
+          <p class="signup-form-sub">注册后我们会发一封验证邮件到你的邮箱</p>
+
+          <div class="signup-error" id="formError"></div>
+
+          <form class="signup-form" id="signupForm" autocomplete="off">
+            <div class="form-group">
+              <label for="tenant_slug">租户标识（slug）<span style="color:#ef4444">*</span></label>
+              <input
+                type="text"
+                id="tenant_slug"
+                name="tenant_slug"
+                placeholder="my-magazine"
+                pattern="^[a-z0-9-]{2,32}$"
+                title="2-32 字符，仅 a-z 0-9 -"
+                required
+              >
+              <div class="form-hint">2-32 字符，仅小写字母、数字、连字符。登录和阅读端 URL 都会用到，<b>注册后不可修改</b>。</div>
+            </div>
+            <div class="form-group">
+              <label for="tenant_name">显示名<span style="color:#ef4444">*</span></label>
+              <input
+                type="text"
+                id="tenant_name"
+                name="tenant_name"
+                placeholder="卓宝人杂志"
+                maxlength="64"
+                required
+              >
+            </div>
+            <div class="form-group">
+              <label for="email">邮箱（owner 账号）<span style="color:#ef4444">*</span></label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                placeholder="you@example.com"
+                autocomplete="email"
+                required
+              >
+              <div class="form-hint">验证链接和初始密码会发到这个邮箱，请用真实邮箱。</div>
+            </div>
+            <button type="submit" class="signup-submit" id="signupSubmit">提交注册</button>
+          </form>
+
+          <p class="signup-foot">
+            已有账号？<a href="/admin/login.html">直接登录</a>
+          </p>
+        </div>
+
+        <!-- 步骤 3：成功页（默认隐藏） -->
+        <div class="signup-success" id="successCard" style="display:none">
+          <div class="signup-success-icon">✅</div>
+          <h2>注册申请已提交</h2>
+          <p>请查收 <b id="successEmail"></b> 邮箱中的验证链接，<br>点击链接即可完成开通（24 小时内有效）。</p>
+
+          <div class="signup-success-verify">
+            <div class="signup-success-verify-label">🔗 验证链接（开发用，生产以邮件为准）</div>
+            <div class="signup-success-verify-link" id="successVerifyLink"></div>
+            <div style="margin-top:8px;text-align:right">
+              <button type="button" class="copy-btn" id="copyLinkBtn">复制链接</button>
+            </div>
+          </div>
+
+          <p class="signup-success-foot">
+            收到邮件后点链接 → 获得初始密码 → 登录后请立即修改密码。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var planGrid = document.getElementById('planGrid');
+      var formCard = document.getElementById('formCard');
+      var successCard = document.getElementById('successCard');
+      var selectedPlanChip = document.getElementById('selectedPlanChip');
+      var formError = document.getElementById('formError');
+      var signupForm = document.getElementById('signupForm');
+      var signupSubmit = document.getElementById('signupSubmit');
+      var planIdInput = null;  // 不放 DOM，靠 JS 变量
+
+      var selectedPlan = null;  // {id, slug, name, ...}
+
+      // ========== 工具 ==========
+      function showError(msg) {
+        formError.textContent = msg;
+        formError.classList.add('show');
+        formError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      function clearError() {
+        formError.textContent = '';
+        formError.classList.remove('show');
+      }
+      function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+        });
+      }
+      function escapeAttr(s) { return escapeHtml(s); }
+
+      // ========== 加载套餐 ==========
+      function renderPlans(plans) {
+        if (!plans || !plans.length) {
+          planGrid.innerHTML = '<div class="plan-card-empty">暂无套餐</div>';
+          return;
+        }
+        planGrid.innerHTML = plans.map(function (p) {
+          var features = p.features || {};
+          var featList = Object.keys(features)
+            .filter(function (k) { return features[k]; })
+            .map(function (k) { return '<li>' + escapeHtml(k) + '：' + escapeHtml(features[k]) + '</li>'; })
+            .join('');
+          if (!featList) featList = '<li>基础功能</li>';
+          var badge = p.slug === 'pro' ? '<div class="plan-card-badge">推荐</div>' : '';
+          return ''
+            + '<div class="plan-card" data-plan-id="' + escapeAttr(p.id) + '" data-plan-slug="' + escapeAttr(p.slug) + '">'
+            +   badge
+            +   '<div class="plan-card-name">' + escapeHtml(p.name) + '</div>'
+            +   '<div class="plan-card-price">'
+            +     '<span class="plan-card-price-num">¥' + (p.price_monthly_cny || 0) + '</span>'
+            +     '<span class="plan-card-price-unit">/月</span>'
+            +   '</div>'
+            +   '<ul class="plan-card-features">' + featList + '</ul>'
+            + '</div>';
+        }).join('');
+
+        // 绑定点击：选套餐 → 展开表单
+        planGrid.querySelectorAll('.plan-card').forEach(function (card) {
+          card.addEventListener('click', function () {
+            planGrid.querySelectorAll('.plan-card').forEach(function (c) { c.classList.remove('selected'); });
+            card.classList.add('selected');
+            var id = Number(card.getAttribute('data-plan-id'));
+            var slug = card.getAttribute('data-plan-slug');
+            var name = card.querySelector('.plan-card-name').textContent;
+            selectedPlan = { id: id, slug: slug, name: name };
+            selectedPlanChip.textContent = '已选：' + name;
+            formCard.style.display = '';
+            formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            clearError();
+            // 自动 focus 第一个字段
+            setTimeout(function () { document.getElementById('tenant_slug').focus(); }, 300);
+          });
+        });
+      }
+
+      fetch('/api/public/plans', { credentials: 'omit' })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+        .then(renderPlans)
+        .catch(function (err) {
+          planGrid.innerHTML = '<div class="plan-card-empty" style="color:#991b1b">套餐加载失败：' + escapeHtml(err.message) + '，请刷新重试</div>';
+        });
+
+      // ========== 提交注册 ==========
+      signupForm.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        clearError();
+        if (!selectedPlan) { showError('请先选择一个套餐'); return; }
+
+        var tenant_slug = (document.getElementById('tenant_slug').value || '').trim();
+        var tenant_name = (document.getElementById('tenant_name').value || '').trim();
+        var email = (document.getElementById('email').value || '').trim();
+
+        if (!/^[a-z0-9-]{2,32}$/.test(tenant_slug)) {
+          showError('租户标识只能是 a-z 0-9 -，2-32 字符'); return;
+        }
+        if (!tenant_name) { showError('请填写显示名'); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('请填写有效邮箱'); return; }
+
+        signupSubmit.disabled = true;
+        var originalText = signupSubmit.textContent;
+        signupSubmit.textContent = '提交中…';
+
+        fetch('/api/public/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email, tenant_slug: tenant_slug, tenant_name: tenant_name, plan_id: selectedPlan.id })
+        })
+          .then(function (res) {
+            return res.json().then(function (body) { return { ok: res.ok, status: res.status, body: body }; });
+          })
+          .then(function (result) {
+            if (result.ok && result.body && result.body.success) {
+              // 成功 → 展示成功卡
+              formCard.style.display = 'none';
+              planGrid.style.display = 'none';
+              document.querySelector('.signup-hero').style.display = 'none';
+              document.getElementById('successEmail').textContent = email;
+              document.getElementById('successVerifyLink').textContent = result.body.verify_link || '(无，邮件已发出)';
+              successCard.style.display = '';
+              successCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              return;
+            }
+            // 失败
+            var msg = (result.body && result.body.error) ? result.body.error : ('提交失败 (HTTP ' + result.status + ')');
+            showError(msg);
+            signupSubmit.disabled = false;
+            signupSubmit.textContent = originalText;
+          })
+          .catch(function (err) {
+            showError('网络错误：' + (err && err.message ? err.message : '请稍后重试'));
+            signupSubmit.disabled = false;
+            signupSubmit.textContent = originalText;
+          });
+      });
+
+      // 复制按钮
+      var copyBtn = document.getElementById('copyLinkBtn');
+      copyBtn.addEventListener('click', function () {
+        var text = document.getElementById('successVerifyLink').textContent || '';
+        if (!navigator.clipboard) {
+          // fallback：选中
+          var range = document.createRange();
+          range.selectNode(document.getElementById('successVerifyLink'));
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+          return;
+        }
+        navigator.clipboard.writeText(text).then(function () {
+          copyBtn.textContent = '✓ 已复制';
+          copyBtn.classList.add('copied');
+          setTimeout(function () {
+            copyBtn.textContent = '复制链接';
+            copyBtn.classList.remove('copied');
+          }, 1800);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

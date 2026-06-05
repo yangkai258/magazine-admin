@@ -22,6 +22,12 @@
         <a href="/admin/audit.html" class="nav-item platform-only" data-page="audit" style="display:none">
           <span class="nav-icon">📋</span> 审计日志
         </a>
+        <a href="/admin/email-log.html" class="nav-item platform-only" data-page="email-log" style="display:none">
+          <span class="nav-icon">📧</span> 邮件日志
+        </a>
+        <a href="/admin/tenant-users.html" class="nav-item owner-only" data-page="tenant-users" style="display:none">
+          <span class="nav-icon">👥</span> 用户管理
+        </a>
       </nav>
     </aside>
     <main class="main-content">
@@ -77,7 +83,7 @@
         <div class="card">
           <div class="card-title">
             杂志页面管理
-            <div style="display:flex;gap:8px">
+            <div id="uploadActions" style="display:flex;gap:8px">
               <label class="btn btn-secondary btn-sm" style="cursor:pointer">
                 📤 单页上传
                 <input type="file" id="singleUpload" accept="image/*" style="display:none">
@@ -114,10 +120,22 @@
 
   <script src="/admin/js/api.js"></script>
   <script>
-    // 平台管理员才显示「平台管理」「审计日志」菜单
+    // 平台管理员才显示「平台管理」「审计日志」菜单；owner 显示「用户管理」
     MAG_AUTH.getTenant().then(function(t) {
       if (t && t.is_platform_admin) {
         document.querySelectorAll('.platform-only').forEach(function(el) { el.style.display = ''; });
+      }
+    });
+    MAG_AUTH.getUser().then(function(u) {
+      if (u && u.role === 'owner') {
+        document.querySelectorAll('.owner-only').forEach(function(el) { el.style.display = ''; });
+        window.__isOwner = true;
+      } else {
+        window.__isOwner = false;
+      }
+      // 角色确定后，重新执行 load 以应用正确的 UI
+      if (window.__initialLoadDone && typeof window.__rerunLoad === 'function') {
+        window.__rerunLoad();
       }
     });
   </script>
@@ -125,8 +143,36 @@
     const magazineId = new URLSearchParams(location.search).get('id');
     let pages = [];
     let draggedEl = null;
+    window.__initialLoadDone = false;
 
     async function load() {
+      window.__initialLoadDone = true;
+      // 缓存当前页面数据，role 确定后可能需要重新 render
+      await _doLoad();
+    }
+    // 暴露给第一个 script 的 getUser callback，role 确定后调用
+    window.__rerunLoad = async function () {
+      // 重新启用表单字段（因为初次 load 可能已经禁用）
+      ['mName', 'mDate', 'mDesc', 'mCoverFile', 'mEnabled'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.disabled = false;
+      });
+      var banner = document.getElementById('readonlyBanner');
+      if (banner) banner.remove();
+      var saveBtn = document.getElementById('saveBtn');
+      if (saveBtn) saveBtn.style.display = '';
+      var uploadActions = document.getElementById('uploadActions');
+      if (uploadActions) uploadActions.style.display = '';
+      var dropZone = document.getElementById('dropZone');
+      if (dropZone) {
+        dropZone.style.pointerEvents = '';
+        dropZone.style.opacity = '';
+        dropZone.innerHTML = '<div style="font-size:28px;margin-bottom:8px">📤</div><p>将图片拖拽到这里，或点击上方的「单页上传」「批量上传」按钮</p><p style="font-size:12px;margin-top:4px;color:#92400e">支持 JPG / PNG / WebP，单文件最大 50MB</p>';
+      }
+      await _doLoad();
+    };
+
+    async function _doLoad() {
       const m = await api.get('/magazines/' + magazineId);
       document.getElementById('pageTitle').textContent = m.name;
       document.getElementById('mId').value = m.id;
@@ -139,18 +185,54 @@
       document.getElementById('mCoverPreview').src = coverImg(coverUrl);
       document.getElementById('mEnabled').value = m.enabled;
       pages = m.pages || [];
+      // 非 owner：禁用所有编辑控件（前端拦截，后端也有 requireRole 兜底）
+      const isOwner = !!window.__isOwner;
+      if (!isOwner) applyReadOnly();
       renderPages();
     }
 
+    function applyReadOnly() {
+      // 1. 表单字段全部禁用
+      ['mName', 'mDate', 'mDesc', 'mCoverFile', 'mEnabled'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.disabled = true;
+      });
+      // 2. 隐藏保存按钮
+      var saveBtn = document.getElementById('saveBtn');
+      if (saveBtn) saveBtn.style.display = 'none';
+      // 3. 隐藏上传操作栏
+      var uploadActions = document.getElementById('uploadActions');
+      if (uploadActions) uploadActions.style.display = 'none';
+      // 4. 禁用 drop zone
+      var dropZone = document.getElementById('dropZone');
+      if (dropZone) {
+        dropZone.style.pointerEvents = 'none';
+        dropZone.style.opacity = '0.5';
+        dropZone.innerHTML = '<div style="font-size:28px;margin-bottom:8px">🔒</div><p style="color:var(--text-secondary)">只读模式：仅 owner 可上传/删除页面</p>';
+      }
+      // 5. 在基本信息卡片顶部加只读 banner
+      var basicCard = document.querySelector('.content-area .card');
+      if (basicCard && !document.getElementById('readonlyBanner')) {
+        var banner = document.createElement('div');
+        banner.id = 'readonlyBanner';
+        banner.style.cssText = 'background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#78350f;line-height:1.6';
+        banner.innerHTML = '🔒 <b>只读模式</b>：你当前是 <code>editor</code> / <code>viewer</code> 角色，无法修改杂志信息、上传/删除页面。如需编辑权限，请联系 owner。';
+        basicCard.insertBefore(banner, basicCard.firstChild);
+      }
+    }
+
     function renderPages() {
-      document.getElementById('pageCountLabel').textContent = `共 ${pages.length} 页，拖拽可排序`;
+      const isOwner = !!window.__isOwner;
+      document.getElementById('pageCountLabel').textContent = `共 ${pages.length} 页` + (isOwner ? '，拖拽可排序' : '（只读）');
       document.getElementById('pageList').innerHTML = pages.map((p, i) => `
-        <div class="page-thumb" draggable="true" data-id="${p.id}" data-index="${i}">
+        <div class="page-thumb" ${isOwner ? 'draggable="true"' : ''} data-id="${p.id}" data-index="${i}">
           <img src="${coverImg(p.image_path)}" onerror="this.parentElement.style.background='#eee'">
           <div class="page-num">第 ${i + 1} 页</div>
-          <button class="page-del" onclick="deletePage(${p.id}, event)">×</button>
+          ${isOwner ? `<button class="page-del" onclick="deletePage(${p.id}, event)">×</button>` : ''}
         </div>
       `).join('');
+
+      if (!isOwner) return;  // 非 owner：不绑定拖拽事件
 
       // 拖拽事件
       document.querySelectorAll('.page-thumb').forEach(el => {

@@ -7,9 +7,14 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; overflow: hidden; background: #fff; }
+    /* ====== 品牌主色（默认 #4f46e5；JS 启动后用 tenant.primary_color 覆盖）====== */
+    :root {
+      --primary: #4f46e5;
+      --primary-rgb: 79, 70, 229;  /* 用于 rgba() */
+    }
 
     .back-btn { position: fixed; top: 16px; left: 16px; background: rgba(0,0,0,0.55); backdrop-filter: blur(10px); color: #fff; border: 1px solid rgba(255,255,255,0.35); border-radius: 24px; padding: 8px 18px; font-size: 13px; font-family: Arial, sans-serif; cursor: pointer; z-index: 200; display: flex; align-items: center; gap: 6px; transition: all 0.2s; text-decoration: none; }
-    .back-btn:hover { background: rgba(0,0,0,0.75); border-color: rgba(255,255,255,0.6); }
+    .back-btn:hover { background: var(--primary); border-color: var(--primary); }
     .back-btn svg { width: 14px; height: 14px; fill: #fff; }
 
     /* ===== 桌面端（双页书脊） ===== */
@@ -25,18 +30,19 @@
 
     /* 桌面端导航 */
     .nav-btn { position: fixed; top: 50%; transform: translateY(-50%); width: 64px; height: 120px; background: rgba(255,255,255,0.85); border: 2px solid rgba(255,255,255,0.9); border-radius: 12px; cursor: pointer; z-index: 100; display: flex; align-items: center; justify-content: center; transition: all 0.2s; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-    .nav-btn:hover { background: #fff; box-shadow: 0 4px 30px rgba(0,0,0,0.4); }
-    .nav-btn svg { width: 28px; height: 28px; fill: #333; }
+    .nav-btn:hover { background: var(--primary); border-color: var(--primary); box-shadow: 0 4px 30px rgba(var(--primary-rgb), 0.4); }
+    .nav-btn:hover svg { fill: #fff; }
+    .nav-btn svg { width: 28px; height: 28px; fill: #333; transition: fill 0.2s; }
     .nav-btn.prev { left: 20px; }
     .nav-btn.next { right: 20px; }
-    .page-indicator { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.5); color: #fff; padding: 6px 16px; border-radius: 20px; font-size: 14px; font-family: Arial, sans-serif; z-index: 100; pointer-events: none; }
+    .page-indicator { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--primary); color: #fff; padding: 6px 18px; border-radius: 20px; font-size: 14px; font-family: Arial, sans-serif; z-index: 100; pointer-events: none; box-shadow: 0 2px 12px rgba(var(--primary-rgb), 0.4); }
 
     /* 桌面端缩放控件 */
     .zoom-ctl { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
     .zoom-ctl button { width: 48px; height: 48px; background: rgba(255,255,255,0.9); border: 2px solid rgba(255,255,255,0.9); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3); transition: all 0.2s; }
     .zoom-ctl button:hover { background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.4); transform: scale(1.08); }
-    .zoom-ctl button svg { width: 22px; height: 22px; fill: #333; }
-    .zoom-ctl button.active { background: #333; border-color: #333; }
+    .zoom-ctl button svg { width: 22px; height: 22px; fill: #333; transition: fill 0.2s; }
+    .zoom-ctl button.active { background: var(--primary); border-color: var(--primary); }
     .zoom-ctl button.active svg { fill: #fff; }
     .zoom-label { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.5); color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-family: Arial, sans-serif; z-index: 100; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
     .zoom-label.show { opacity: 1; }
@@ -48,21 +54,39 @@
     .mobile-mode .mobile-track .mobile-page { flex: 0 0 100vw; width: 100vw; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden !important; }
     .mobile-mode .mobile-track .mobile-page img { width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; }
 
-    /* 移动端底部圆点 */
+    /* 移动端底部圆点（进度条）*/
     .mobile-dots-bar { position: fixed; bottom: 90px; left: 0; right: 0; display: flex; gap: 6px; justify-content: center; z-index: 100; padding: 0 8px; }
-    .mobile-dots-bar .m-dot { height: 6px; border-radius: 3px; background: #ccc; transition: all 0.25s; cursor: pointer; width: 6px; }
-    .mobile-dots-bar .m-dot.active { background: #333; width: 18px; }
+    .mobile-dots-bar .m-dot { height: 6px; border-radius: 3px; background: rgba(0,0,0,0.18); transition: all 0.25s; cursor: pointer; width: 6px; }
+    .mobile-dots-bar .m-dot.active { background: var(--primary); width: 24px; box-shadow: 0 0 8px rgba(var(--primary-rgb), 0.4); }
+    .mobile-dots-bar .m-dot:hover { background: rgba(var(--primary-rgb), 0.4); }
 
     /* 移动端底部导航 */
     .mobile-bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 24px; padding: 16px 20px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: rgba(255,255,255,0.97); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 100; box-shadow: 0 -2px 20px rgba(0,0,0,0.06); }
     .mobile-bottom-nav .m-nav-btn { width: 44px; height: 44px; border-radius: 50%; background: #fff; border: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
-    .mobile-bottom-nav .m-nav-btn:active { background: #f0f0f0; transform: scale(0.95); }
+    .mobile-bottom-nav .m-nav-btn:active { background: var(--primary); border-color: var(--primary); transform: scale(0.95); }
+    .mobile-bottom-nav .m-nav-btn:active svg { stroke: #fff; }
     .mobile-bottom-nav .m-nav-btn:disabled { opacity: 0.3; pointer-events: none; }
-    .mobile-bottom-nav .m-nav-btn svg { width: 20px; height: 20px; fill: none; stroke: #333; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-    .mobile-bottom-nav .m-page-info { font-size: 15px; color: #333; min-width: 60px; text-align: center; font-weight: 500; }
+    .mobile-bottom-nav .m-nav-btn svg { width: 20px; height: 20px; fill: none; stroke: #333; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.2s; }
+    .mobile-bottom-nav .m-page-info { font-size: 15px; color: var(--primary); min-width: 60px; text-align: center; font-weight: 600; }
 
     .loading { position: fixed; inset: 0; background: #fff; display: flex; align-items: center; justify-content: center; color: #333; font-family: Arial, sans-serif; font-size: 16px; z-index: 999; }
     .loading.hidden { display: none; }
+    .loading .loading-bar {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 3px; background: rgba(var(--primary-rgb), 0.1);
+      overflow: hidden;
+    }
+    .loading .loading-bar::after {
+      content: ""; display: block;
+      width: 30%; height: 100%;
+      background: var(--primary);
+      animation: loadingBar 1.4s ease-in-out infinite;
+    }
+    @keyframes loadingBar {
+      0% { transform: translateX(-100%); }
+      50% { transform: translateX(150%); }
+      100% { transform: translateX(350%); }
+    }
 
     /* 缺图占位 */
     .page-missing {
@@ -83,7 +107,10 @@
   </style>
 </head>
 <body>
-<div class="loading" id="loading">页面加载中...</div>
+<div class="loading" id="loading">
+  页面加载中...
+  <div class="loading-bar"></div>
+</div>
 
 <a class="back-btn" id="backBtn" href="#">
   <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
@@ -133,6 +160,7 @@
 <script src="lib/jquery.min.js"></script>
 <script src="lib/turn.min.js"></script>
 <script src="../config.js"></script>
+<script src="track.js"></script>
 <script>
 (function() {
   // ====== 多租户：解析当前 tenant slug ======
@@ -142,6 +170,52 @@
   }
   var tenantSlug = resolveTenant();
   var magazineId = new URLSearchParams(location.search).get('id') || 1;
+
+  // ====== Reader 埋点：状态（埋点上报由 track.js 提供 window.MAG_TRACK）======
+  var READ_START_TS = Date.now();        // 页面进入时间
+  var completeFired = false;              // complete 一次阅读只发一次
+  var currentTotalImgs = 0;               // 用于判断「读到最后一页」
+
+  function fireViewOnPage(pageNumber) {
+    try {
+      window.MAG_TRACK.trackEvent({
+        tenant_slug: tenantSlug,
+        event_type: 'view',
+        magazine_id: Number(magazineId),
+        page_number: pageNumber
+      });
+    } catch (e) { /* ignore */ }
+  }
+  function fireDwell(durationMs) {
+    try {
+      window.MAG_TRACK.trackEvent({
+        tenant_slug: tenantSlug,
+        event_type: 'dwell',
+        magazine_id: Number(magazineId),
+        duration_ms: Math.max(0, Math.round(durationMs))
+      });
+    } catch (e) { /* ignore */ }
+  }
+  function fireComplete() {
+    if (completeFired) return;
+    completeFired = true;
+    try {
+      window.MAG_TRACK.trackEvent({
+        tenant_slug: tenantSlug,
+        event_type: 'complete',
+        magazine_id: Number(magazineId)
+      });
+    } catch (e) { /* ignore */ }
+  }
+
+  // 离开页面 → 上报 dwell（sendBeacon 兜底）
+  window.addEventListener('beforeunload', function () {
+    fireDwell(Date.now() - READ_START_TS);
+  });
+  // pagehide 在移动端 + 兼容性更好（iOS Safari beforeunload 经常不触发）
+  window.addEventListener('pagehide', function () {
+    fireDwell(Date.now() - READ_START_TS);
+  });
 
   // 返回目录时把 tenant 带上
   document.getElementById('backBtn').setAttribute('href', '../directory.html?t=' + encodeURIComponent(tenantSlug));
@@ -217,6 +291,11 @@
     if (n === 1) $mobileDotsBar.find('.m-dot[data-idx="first"]').addClass('active');
     else if (n === TOTAL_IMGS) $mobileDotsBar.find('.m-dot[data-idx="last"]').addClass('active');
     else $mobileDotsBar.find('.m-dot[data-idx="middle"]').addClass('active');
+
+    // ====== Reader 埋点：移动端翻页 → view ======
+    fireViewOnPage(n);
+    // 读到最后一页 → complete
+    if (n === TOTAL_IMGS && TOTAL_IMGS > 0) fireComplete();
   }
 
   function buildMobileTrack() {
@@ -449,11 +528,18 @@
         turned: function(e, page) {
           $('#pageIndicator').text(page + ' / ' + TOTAL_PAGES);
           updateDeskNav(page);
+          // ====== Reader 埋点：桌面端翻页 → view ======
+          // 桌面端是双页 spread，把 spread 索引当作 page_number 上报
+          fireViewOnPage(page);
+          // 桌面端：读到最后一 spread（同时含封底）→ complete
+          if (page === TOTAL_PAGES) fireComplete();
         }
       }
     });
     $('#pageIndicator').text('1 / ' + TOTAL_PAGES);
     updateDeskNav(1);
+    // ====== Reader 埋点：桌面端首屏 → view (page 1) ======
+    fireViewOnPage(1);
   }
 
   function updateDeskNav(page) {
@@ -565,6 +651,33 @@
     return null;
   }
 
+  // ====== 应用租户品牌（主色）======
+  function applyBranding(tenant) {
+    if (!tenant) return;
+    var color = tenant.primary_color || (window.MAG_CONFIG && window.MAG_CONFIG.PRIMARY_COLOR) || '#4f46e5';
+    document.documentElement.style.setProperty('--primary', color);
+    // 同步 --primary-rgb（用于 rgba() 阴影）
+    var rgb = hexToRgb(color);
+    if (rgb) {
+      document.documentElement.style.setProperty('--primary-rgb', rgb.r + ', ' + rgb.g + ', ' + rgb.b);
+    }
+  }
+
+  // #RRGGBB → {r, g, b}
+  function hexToRgb(hex) {
+    var v = String(hex || '').trim();
+    if (v.charAt(0) === '#') v = v.slice(1);
+    if (v.length === 3) {
+      v = v.charAt(0) + v.charAt(0) + v.charAt(1) + v.charAt(1) + v.charAt(2) + v.charAt(2);
+    }
+    if (!/^[0-9a-fA-F]{6}$/.test(v)) return null;
+    return {
+      r: parseInt(v.slice(0, 2), 16),
+      g: parseInt(v.slice(2, 4), 16),
+      b: parseInt(v.slice(4, 6), 16)
+    };
+  }
+
   function loadMagazine() {
     // SaaS 默认：同源 /api/public/data；可由 MAG_CONFIG.DATA_URL 覆盖
     var dataUrl = (window.MAG_CONFIG && window.MAG_CONFIG.DATA_URL) || (location.origin + '/api/public/data');
@@ -574,6 +687,9 @@
     }).then(function(data) {
       var tenant = findTenantInData(data, tenantSlug);
       if (!tenant) throw new Error('tenant "' + tenantSlug + '" 不存在');
+
+      // 应用品牌（主色 → 翻页按钮 / 进度条 / 圆点）
+      applyBranding(tenant);
 
       var mid = Number(magazineId);
       var mag = (data.magazines || []).find(function(m) {

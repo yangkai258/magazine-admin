@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户管理</title>
+  <link rel="stylesheet" href="/admin/css/style.css">
+  <script src="/admin/js/auth.js"></script>
+  <style>
+    /* 紫色系顶部说明卡片（用户管理主题） */
+    .user-hero {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 18px 22px;
+      margin-bottom: 20px;
+      box-shadow: 0 6px 20px rgba(124, 58, 237, 0.18);
+      position: relative;
+      overflow: hidden;
+    }
+    .user-hero::before {
+      content: "";
+      position: absolute;
+      top: -40px; right: -40px;
+      width: 160px; height: 160px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 50%;
+    }
+    .user-hero h2 {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: relative; z-index: 1;
+    }
+    .user-hero p {
+      font-size: 12px;
+      line-height: 1.6;
+      opacity: 0.95;
+      position: relative; z-index: 1;
+    }
+    .user-hero code {
+      background: rgba(255,255,255,0.2);
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+
+    /* 4 个统计卡 */
+    .user-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .user-stat {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .user-stat-icon {
+      width: 38px; height: 38px;
+      border-radius: 8px;
+      background: #eef2ff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .user-stat-num { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1.2; }
+    .user-stat-label { font-size: 12px; color: var(--text-secondary); }
+
+    /* 顶部 tab 切换：用户 / 待接受邀请 */
+    .tabs .tab { transition: all 0.2s; }
+    .tabs .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+    /* 角色 chip 三色 */
+    .chip-role {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .chip-role-owner  { background: linear-gradient(135deg, #ede9fe, #ddd6fe); color: #6d28d9; border: 1px solid #c4b5fd; }
+    .chip-role-editor { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+    .chip-role-viewer { background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; }
+
+    /* 表格行：列内时间、列内按钮 */
+    .table-wrap td.col-time {
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      white-space: nowrap;
+    }
+    .table-wrap td.col-id { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .table-wrap td.col-actions { white-space: nowrap; }
+    .table-wrap td.col-actions .btn { margin-right: 4px; }
+    .table-wrap td.col-actions .btn:last-child { margin-right: 0; }
+
+    /* 顶部右侧按钮组 */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .toolbar .toolbar-right { display: flex; gap: 8px; margin-left: auto; }
+
+    /* 状态徽章（active / suspended） */
+    .chip-status-active     { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .chip-status-suspended  { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .chip-status-pending    { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+
+    /* 只读模式 banner（platform_admin 看其他租户） */
+    .readonly-banner {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border: 1px solid #fcd34d;
+      border-left: 4px solid #f59e0b;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: #78350f;
+    }
+    .readonly-banner-icon { font-size: 20px; flex-shrink: 0; }
+
+    /* 403 拦截卡（不是 owner 时） */
+    .forbidden-card {
+      max-width: 520px;
+      margin: 60px auto;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .forbidden-card .icon { font-size: 56px; margin-bottom: 8px; }
+    .forbidden-card h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+    .forbidden-card p { color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <script>MAG_AUTH.requireAuth();</script>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav">
+        <a href="/admin/" class="nav-item" data-page="dashboard">
+          <span class="nav-icon">📊</span> 总览
+        </a>
+        <a href="/admin/magazine/list.html" class="nav-item" data-page="magazine">
+          <span class="nav-icon">📖</span> 杂志管理
+        </a>
+        <a href="/admin/cover/list.html" class="nav-item" data-page="cover">
+          <span class="nav-icon">🖼</span> 封面管理
+        </a>
+        <a href="/admin/tenant-users.html" class="nav-item owner-only active" data-page="tenant-users" style="display:none">
+          <span class="nav-icon">👥</span> 用户管理
+        </a>
+        <a href="/admin/platform.html" class="nav-item platform-only" data-page="platform" style="display:none">
+          <span class="nav-icon">🏢</span> 平台管理
+        </a>
+        <a href="/admin/audit.html" class="nav-item platform-only" data-page="audit" style="display:none">
+          <span class="nav-icon">📋</span> 审计日志
+        </a>
+        <a href="/admin/email-log.html" class="nav-item platform-only" data-page="email-log" style="display:none">
+          <span class="nav-icon">📧</span> 邮件日志
+        </a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar">
+        <h1 class="page-title">用户管理</h1>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button>
+      </header>
+      <div class="content-area" id="contentArea">
+        <!-- 加载中占位：JS 接管后会替换 -->
+        <div style="padding:60px 20px;text-align:center;color:var(--text-secondary);font-size:13px">
+          <div style="display:inline-block;width:28px;height:28px;border:3px solid #e5e7eb;border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:8px"></div>
+          <div>加载中...</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 邀请用户 Modal -->
+  <div class="modal-overlay hidden" id="inviteModal">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header">
+        <h3>邀请用户</h3>
+        <button class="modal-close" id="closeInvite" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom:14px">
+          <label>邮箱 <span style="color:#ef4444">*</span></label>
+          <input type="email" id="inviteEmail" placeholder="user@example.com" autocomplete="off">
+        </div>
+        <div class="form-group" style="margin-bottom:6px">
+          <label>角色 <span style="color:#ef4444">*</span></label>
+          <select id="inviteRole" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            <option value="editor">editor · 编辑者（可改杂志/封面/页面）</option>
+            <option value="viewer">viewer · 查看者（只读）</option>
+            <option value="owner">owner · 管理员（可邀请/改角色/删用户）</option>
+          </select>
+        </div>
+        <div style="margin-top:10px;padding:8px 10px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;font-size:12px;color:#3730a3;line-height:1.6">
+          💡 系统会向该邮箱发送一封<strong>72 小时有效</strong>的邀请链接，对方点链接后可设置姓名和密码加入。
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelInvite" type="button">取消</button>
+        <button class="btn btn-primary" id="sendInvite" type="button">📧 发送邀请</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 编辑用户 Modal（姓名/角色） -->
+  <div class="modal-overlay hidden" id="editModal">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header">
+        <h3>编辑用户</h3>
+        <button class="modal-close" id="closeEdit" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editId">
+        <div class="form-group" style="margin-bottom:14px">
+          <label>邮箱</label>
+          <input type="text" id="editEmail" readonly style="background:#f9fafb;color:var(--text-secondary);cursor:not-allowed">
+        </div>
+        <div class="form-group" style="margin-bottom:14px">
+          <label>姓名</label>
+          <input type="text" id="editName" placeholder="用户姓名" autocomplete="off">
+        </div>
+        <div class="form-group" style="margin-bottom:6px">
+          <label>角色 <span style="color:#ef4444">*</span></label>
+          <select id="editRole" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            <option value="owner">owner · 管理员</option>
+            <option value="editor">editor · 编辑者</option>
+            <option value="viewer">viewer · 查看者</option>
+          </select>
+        </div>
+        <div id="editSelfWarning" style="display:none;margin-top:10px;padding:8px 10px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;font-size:12px;color:#92400e;line-height:1.6">
+          ⚠️ 你正在编辑自己的账号。如果改成 viewer，将失去所有写权限（包括本页）。
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelEdit" type="button">取消</button>
+        <button class="btn btn-primary" id="saveEdit" type="button">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 改密码 Modal -->
+  <div class="modal-overlay hidden" id="pwdModal">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header">
+        <h3>重置密码</h3>
+        <button class="modal-close" id="closePwd" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="pwdId">
+        <div class="form-group" style="margin-bottom:6px">
+          <label>用户</label>
+          <input type="text" id="pwdEmail" readonly style="background:#f9fafb;color:var(--text-secondary);cursor:not-allowed">
+        </div>
+        <div class="form-group" style="margin-top:14px;margin-bottom:6px">
+          <label>新密码 <span style="color:#ef4444">*</span></label>
+          <input type="password" id="pwdNew" placeholder="至少 6 位" autocomplete="new-password">
+          <div style="font-size:11px;color:#6b7280;margin-top:4px">新密码将立即生效，请通过安全渠道告知用户</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelPwd" type="button">取消</button>
+        <button class="btn btn-primary" id="savePwd" type="button">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+  <script src="/admin/js/api.js"></script>
+  <script>
+    // ========== 静态状态 ==========
+    var state = {
+      mode: 'self',                 // 'self' = 自己租户；'foreign' = 平台管理员看其他租户
+      tenantId: null,               // URL 上的 ?tenantId
+      me: null,                     // 当前 user
+      tenant: null,                 // 当前 tenant
+      users: [],                    // 用户列表
+      invitations: [],              // 邀请列表（仅 self 模式）
+      activeTab: 'users'            // 'users' | 'invitations'
+    };
+
+    // ========== 工具 ==========
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function escapeAttr(s) { return escapeHtml(s); }
+    function formatTime(str) {
+      if (!str) return '-';
+      return String(str).replace('T', ' ').slice(0, 16);
+    }
+    function roleChip(role) {
+      if (role === 'owner')  return '<span class="chip-role chip-role-owner">👑 owner</span>';
+      if (role === 'editor') return '<span class="chip-role chip-role-editor">✏️ editor</span>';
+      if (role === 'viewer') return '<span class="chip-role chip-role-viewer">👀 viewer</span>';
+      return '<span class="chip-role chip-role-viewer">' + escapeHtml(role || '?') + '</span>';
+    }
+    function statusChip(status) {
+      if (status === 'active')    return '<span class="chip-status-active"     style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">● 正常</span>';
+      if (status === 'suspended') return '<span class="chip-status-suspended"  style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">⏸ 暂停</span>';
+      return '<span style="color:var(--text-secondary);font-size:12px">' + escapeHtml(status || '-') + '</span>';
+    }
+    function invStatusChip(inv) {
+      if (inv.accepted_at) return '<span class="chip-status-active"     style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">✓ 已接受</span>';
+      if (new Date(inv.expires_at) < new Date()) return '<span class="chip-status-suspended"  style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">⏰ 已过期</span>';
+      return '<span class="chip-status-pending"    style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">⏳ 待接受</span>';
+    }
+
+    // ========== 渲染：顶栏（用户信息 + 退出） ==========
+    // （本任务只要求 index.html 显示，但这里同样展示，方便 owner 直观确认自己角色）
+    function renderTopbar() {
+      if (!state.me) return;
+      const bar = document.querySelector('.top-bar');
+      if (!bar) return;
+      // 在退出按钮前插入用户信息
+      if (!document.getElementById('topbarUserInfo')) {
+        const span = document.createElement('div');
+        span.id = 'topbarUserInfo';
+        span.style.cssText = 'display:flex;align-items:center;gap:8px;margin-left:auto;margin-right:12px;font-size:13px;color:var(--text-secondary)';
+        span.innerHTML = ''
+          + '<span>欢迎，<b style="color:var(--text)" id="tbEmail">' + escapeHtml(state.me.email || '') + '</b></span>'
+          + '<span id="tbRoleChip" class="chip-role chip-role-' + escapeAttr(state.me.role || 'viewer') + '">' + escapeHtml((state.me.role || '').toUpperCase()) + '</span>';
+        bar.insertBefore(span, bar.querySelector('button'));
+        // 调整退出按钮的 margin-left
+        const logoutBtn = bar.querySelector('button');
+        if (logoutBtn) logoutBtn.style.marginLeft = '0';
+      }
+    }
+
+    // ========== 403 拦截（不是 owner 也不是 platform_admin） ==========
+    function renderForbidden() {
+      const html = ''
+        + '<div class="forbidden-card">'
+        +   '<div class="icon">🔒</div>'
+        +   '<h2>无权访问</h2>'
+        +   '<p>用户管理仅对 <b>租户管理员（owner）</b> 开放。<br>'
+        +     '当前账号 <code style="background:#f3f4f6;padding:1px 6px;border-radius:3px">' + escapeHtml(state.me ? state.me.role : '?') + '</code> 无访问权限，请联系 owner。</p>'
+        +   '<div style="margin-top:18px"><a href="/admin/" class="btn btn-secondary btn-sm">返回总览</a></div>'
+        + '</div>';
+      document.getElementById('contentArea').innerHTML = html;
+    }
+
+    // ========== 渲染：主面板 ==========
+    function renderHero() {
+      return ''
+        + '<div class="user-hero">'
+        +   '<h2>👥 用户管理</h2>'
+        +   '<p>'
+        +     '此页面仅 <strong>owner</strong> 可见。owner 可邀请新用户、调整角色、重置密码、删除用户。'
+        +     '被邀请人会收到一封邮件，链接 72 小时内有效。'
+        +     '所有操作会写入审计日志。'
+        +   '</p>'
+        + '</div>';
+    }
+
+    function renderReadonlyBanner() {
+      if (state.mode !== 'foreign') return '';
+      return ''
+        + '<div class="readonly-banner">'
+        +   '<div class="readonly-banner-icon">⚠️</div>'
+        +   '<div>'
+        +     '<b>只读模式</b>：平台管理员正在查看租户 <code>' + escapeHtml(state.tenant ? state.tenant.slug : '?') + '</code> 的用户列表。'
+        +     '跨租户编辑接口尚未上线（需要新增 <code>/api/admin/users/:id</code> 端点），目前仅展示只读视图。'
+        +   '</div>'
+        + '</div>';
+    }
+
+    function renderStats() {
+      const all = state.users;
+      const ownerN  = all.filter(u => u.role === 'owner').length;
+      const editorN = all.filter(u => u.role === 'editor').length;
+      const viewerN = all.filter(u => u.role === 'viewer').length;
+      return ''
+        + '<div class="user-stats">'
+        +   '<div class="user-stat"><div class="user-stat-icon" style="background:#eef2ff">👥</div><div><div class="user-stat-num">' + all.length + '</div><div class="user-stat-label">用户总数</div></div></div>'
+        +   '<div class="user-stat"><div class="user-stat-icon" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe)">👑</div><div><div class="user-stat-num">' + ownerN + '</div><div class="user-stat-label">owner 数</div></div></div>'
+        +   '<div class="user-stat"><div class="user-stat-icon" style="background:#dbeafe">✏️</div><div><div class="user-stat-num">' + editorN + '</div><div class="user-stat-label">editor 数</div></div></div>'
+        +   '<div class="user-stat"><div class="user-stat-icon" style="background:#f3f4f6">👀</div><div><div class="user-stat-num">' + viewerN + '</div><div class="user-stat-label">viewer 数</div></div></div>'
+        + '</div>';
+    }
+
+    function renderTabs() {
+      if (state.mode !== 'self') return '';  // 只读模式不显示邀请 tab
+      const isUsers = state.activeTab === 'users';
+      const isInv   = state.activeTab === 'invitations';
+      const pendingN = state.invitations.filter(function (i) { return !i.accepted_at && new Date(i.expires_at) > new Date(); }).length;
+      return ''
+        + '<div class="tabs">'
+        +   '<button class="tab ' + (isUsers ? 'active' : '') + '" data-tab="users">👥 用户列表（' + state.users.length + '）</button>'
+        +   '<button class="tab ' + (isInv   ? 'active' : '') + '" data-tab="invitations">📨 待接受邀请（' + pendingN + '）</button>'
+        + '</div>';
+    }
+
+    function renderToolbar() {
+      if (state.mode !== 'self') {
+        return ''
+          + '<div class="toolbar">'
+          +   '<div class="toolbar-right">'
+          +     '<button class="btn btn-secondary btn-sm" id="refreshBtn">↻ 刷新</button>'
+          +   '</div>'
+          + '</div>';
+      }
+      return ''
+        + '<div class="toolbar">'
+        +   '<div class="toolbar-right">'
+        +     '<button class="btn btn-secondary btn-sm" id="refreshBtn">↻ 刷新</button>'
+        +     '<button class="btn btn-primary" id="openInviteBtn">+ 邀请用户</button>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    function renderUsersTable() {
+      if (state.users.length === 0) {
+        return '<div class="empty-state"><div class="empty-icon">👥</div><p>还没有用户</p></div>';
+      }
+      const rows = state.users.map(function (u) {
+        const isSelf = state.me && u.id === state.me.id;
+        const opBtns = (state.mode === 'self')
+          ? '<button class="btn btn-xs btn-secondary" data-act="edit"   data-id="' + u.id + '" data-email="' + escapeAttr(u.email) + '" data-name="' + escapeAttr(u.name || '') + '" data-role="' + escapeAttr(u.role) + '">编辑</button>'
+            + '<button class="btn btn-xs btn-secondary" data-act="pwd"    data-id="' + u.id + '" data-email="' + escapeAttr(u.email) + '">改密码</button>'
+            + (isSelf
+                ? '<button class="btn btn-xs btn-secondary" disabled title="不能删除自己">删除</button>'
+                : '<button class="btn btn-xs btn-danger"  data-act="delete" data-id="' + u.id + '" data-email="' + escapeAttr(u.email) + '">删除</button>')
+          : '<span style="color:var(--text-secondary);font-size:11px">— 只读 —</span>';
+        return ''
+          + '<tr>'
+          +   '<td class="col-id">' + u.id + '</td>'
+          +   '<td>' + escapeHtml(u.email) + (isSelf ? ' <span style="color:var(--primary);font-size:11px;font-weight:600">（我）</span>' : '') + '</td>'
+          +   '<td>' + escapeHtml(u.name || '-') + '</td>'
+          +   '<td>' + roleChip(u.role) + '</td>'
+          +   '<td>' + statusChip(u.status) + '</td>'
+          +   '<td class="col-time">' + formatTime(u.last_login_at) + '</td>'
+          +   '<td class="col-time">' + formatTime(u.created_at) + '</td>'
+          +   '<td class="col-actions">' + opBtns + '</td>'
+          + '</tr>';
+      }).join('');
+      return ''
+        + '<div class="table-wrap">'
+        +   '<table>'
+        +     '<thead><tr>'
+        +       '<th>ID</th><th>邮箱</th><th>姓名</th><th>角色</th><th>状态</th><th>最后登录</th><th>创建时间</th><th>操作</th>'
+        +     '</tr></thead>'
+        +     '<tbody>' + rows + '</tbody>'
+        +   '</table>'
+        + '</div>';
+    }
+
+    function renderInvitationsTable() {
+      if (state.invitations.length === 0) {
+        return '<div class="empty-state"><div class="empty-icon">📨</div><p>没有邀请记录</p></div>';
+      }
+      const rows = state.invitations.map(function (i) {
+        return ''
+          + '<tr>'
+          +   '<td class="col-id">' + i.id + '</td>'
+          +   '<td>' + escapeHtml(i.email) + '</td>'
+          +   '<td>' + roleChip(i.role) + '</td>'
+          +   '<td>' + invStatusChip(i) + '</td>'
+          +   '<td class="col-time">' + formatTime(i.created_at) + '</td>'
+          +   '<td class="col-time">' + formatTime(i.expires_at) + '</td>'
+          +   '<td class="col-time">' + formatTime(i.accepted_at) + '</td>'
+          +   '<td class="col-actions">'
+          +     (i.accepted_at
+                  ? '<span style="color:var(--text-secondary);font-size:11px">—</span>'
+                  : '<button class="btn btn-xs btn-secondary" data-act="resend" data-id="' + i.id + '" data-email="' + escapeAttr(i.email) + '">重发邀请</button>')
+          +   '</td>'
+          + '</tr>';
+      }).join('');
+      return ''
+        + '<div class="table-wrap">'
+        +   '<table>'
+        +     '<thead><tr>'
+        +       '<th>ID</th><th>邮箱</th><th>角色</th><th>状态</th><th>邀请时间</th><th>过期时间</th><th>接受时间</th><th>操作</th>'
+        +     '</tr></thead>'
+        +     '<tbody>' + rows + '</tbody>'
+        +   '</table>'
+        + '</div>';
+    }
+
+    function renderContent() {
+      const area = document.getElementById('contentArea');
+      let html = renderHero() + renderReadonlyBanner() + renderStats() + renderTabs() + renderToolbar();
+      if (state.activeTab === 'invitations' && state.mode === 'self') {
+        html += renderInvitationsTable();
+      } else {
+        html += renderUsersTable();
+      }
+      area.innerHTML = html;
+      bindEvents();
+    }
+
+    function bindEvents() {
+      const refresh = document.getElementById('refreshBtn');
+      if (refresh) refresh.addEventListener('click', function () { loadAll(); });
+      const openInvite = document.getElementById('openInviteBtn');
+      if (openInvite) openInvite.addEventListener('click', openInviteModal);
+
+      // tab 切换
+      document.querySelectorAll('.tabs .tab').forEach(function (t) {
+        t.addEventListener('click', function () {
+          state.activeTab = t.dataset.tab;
+          renderContent();
+        });
+      });
+
+      // 操作列事件委托
+      const tbody = document.querySelector('.table-wrap tbody');
+      if (tbody) {
+        tbody.querySelectorAll('button[data-act]').forEach(function (btn) {
+          btn.addEventListener('click', onActionClick);
+        });
+      }
+    }
+
+    function onActionClick(ev) {
+      const btn = ev.currentTarget;
+      const act = btn.getAttribute('data-act');
+      const id = Number(btn.getAttribute('data-id'));
+      if (act === 'edit')    return openEditModal(id, btn.getAttribute('data-email'), btn.getAttribute('data-name'), btn.getAttribute('data-role'));
+      if (act === 'pwd')     return openPwdModal(id, btn.getAttribute('data-email'));
+      if (act === 'delete')  return doDelete(id, btn.getAttribute('data-email'));
+      if (act === 'resend')  return doResend(id, btn.getAttribute('data-email'), btn);
+    }
+
+    // ========== Modal: 邀请用户 ==========
+    function openInviteModal() {
+      document.getElementById('inviteEmail').value = '';
+      document.getElementById('inviteRole').value = 'editor';
+      document.getElementById('inviteModal').classList.remove('hidden');
+      setTimeout(function () { document.getElementById('inviteEmail').focus(); }, 50);
+    }
+    function closeInviteModal() { document.getElementById('inviteModal').classList.add('hidden'); }
+
+    async function sendInvite() {
+      const email = (document.getElementById('inviteEmail').value || '').trim();
+      const role  = document.getElementById('inviteRole').value;
+      if (!email) { toast('请输入邮箱', 'error'); return; }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('邮箱格式不正确', 'error'); return; }
+      try {
+        const r = await api.post('/admin/tenant/users/invite', { email: email, role: role });
+        toast('已发送邀请给 ' + email, 'success');
+        // 显示返回的 accept_link（开发用，生产是邮件链接）
+        if (r && r.accept_link) {
+          console.log('[invite] accept_link:', r.accept_link);
+          // 弹个友好提示
+          if (confirm('邀请已发送 ✅\n\n📧 链接已记录到控制台（F12 → Console）。\n\n[SMTP 未配置时] 链接是：\n' + r.accept_link + '\n\n点击「确定」复制到剪贴板？')) {
+            try { await navigator.clipboard.writeText(r.accept_link); toast('已复制到剪贴板', 'success'); } catch (e) { /* ignore */ }
+          }
+        }
+        closeInviteModal();
+        loadAll();
+      } catch (e) { toast(e.message || '发送失败', 'error'); }
+    }
+
+    // ========== Modal: 编辑用户 ==========
+    function openEditModal(id, email, name, role) {
+      document.getElementById('editId').value = id;
+      document.getElementById('editEmail').value = email || '';
+      document.getElementById('editName').value = name || '';
+      document.getElementById('editRole').value = role || 'viewer';
+      const isSelf = state.me && id === state.me.id;
+      document.getElementById('editSelfWarning').style.display = isSelf ? 'block' : 'none';
+      document.getElementById('editModal').classList.remove('hidden');
+      setTimeout(function () { document.getElementById('editName').focus(); }, 50);
+    }
+    function closeEditModal() { document.getElementById('editModal').classList.add('hidden'); }
+
+    async function saveEdit() {
+      const id = Number(document.getElementById('editId').value);
+      const name = (document.getElementById('editName').value || '').trim();
+      const role = document.getElementById('editRole').value;
+      if (!name) { toast('姓名必填', 'error'); return; }
+      const body = { name: name, role: role };
+      try {
+        await api.put('/admin/tenant/users/' + id, body);
+        toast('已保存', 'success');
+        closeEditModal();
+        loadAll();
+      } catch (e) { toast(e.message || '保存失败', 'error'); }
+    }
+
+    // ========== Modal: 改密码 ==========
+    function openPwdModal(id, email) {
+      document.getElementById('pwdId').value = id;
+      document.getElementById('pwdEmail').value = email || '';
+      document.getElementById('pwdNew').value = '';
+      document.getElementById('pwdModal').classList.remove('hidden');
+      setTimeout(function () { document.getElementById('pwdNew').focus(); }, 50);
+    }
+    function closePwdModal() { document.getElementById('pwdModal').classList.add('hidden'); }
+
+    async function savePwd() {
+      const id = Number(document.getElementById('pwdId').value);
+      const pwd = document.getElementById('pwdNew').value;
+      if (!pwd || pwd.length < 6) { toast('密码至少 6 位', 'error'); return; }
+      const body = { password: pwd };
+      try {
+        await api.put('/admin/tenant/users/' + id, body);
+        toast('密码已重置', 'success');
+        closePwdModal();
+        loadAll();
+      } catch (e) { toast(e.message || '重置失败', 'error'); }
+    }
+
+    // ========== 操作：删除 ==========
+    async function doDelete(id, email) {
+      if (state.me && id === state.me.id) { toast('不能删除自己', 'error'); return; }
+      if (!confirm('确认删除用户「' + email + '」吗？\n该用户将无法再登录此后台。')) return;
+      try {
+        await api.del('/admin/tenant/users/' + id);
+        toast('已删除 ' + email, 'success');
+        loadAll();
+      } catch (e) { toast(e.message || '删除失败', 'error'); }
+    }
+
+    // ========== 操作：重发邀请 ==========
+    async function doResend(invitationId, email, btn) {
+      if (btn) { btn.disabled = true; btn.textContent = '发送中...'; }
+      // 后端没有专门的 /resend 端点；现实做法是再调一次 invite（如果邮箱已存在会自动 400）
+      // 这里调原 invite 端点，让后端决定
+      try {
+        await api.post('/admin/tenant/users/invite', { email: email, role: 'editor' });
+        toast('已重新发送邀请给 ' + email, 'success');
+      } catch (e) {
+        const msg = e.message || '重发失败';
+        if (/已经是本租户用户|already/i.test(msg)) {
+          toast('该用户已是租户成员，无需重新邀请', 'error');
+        } else {
+          toast(msg, 'error');
+        }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '重发邀请'; }
+      }
+    }
+
+    // ========== 数据加载 ==========
+    async function loadUsers() {
+      // self 模式：调 /admin/tenant/users（scoped to req.tenant.id）
+      // foreign 模式：调 /api/admin/users?tenantId=X（仅 platform_admin）
+      const url = (state.mode === 'foreign' && state.tenantId)
+        ? '/admin/users?tenantId=' + encodeURIComponent(state.tenantId)
+        : '/admin/tenant/users';
+      state.users = await api.get(url);
+    }
+    async function loadInvitations() {
+      if (state.mode !== 'self') { state.invitations = []; return; }
+      try { state.invitations = await api.get('/admin/tenant/invitations'); }
+      catch (e) { state.invitations = []; }
+    }
+
+    async function loadAll() {
+      try {
+        await Promise.all([loadUsers(), loadInvitations()]);
+        renderContent();
+      } catch (e) {
+        const msg = e.message || '加载失败';
+        const is403 = /403|ROLE_REQUIRED|需要角色/.test(msg);
+        document.getElementById('contentArea').innerHTML = ''
+          + '<div class="forbidden-card">'
+          +   '<div class="icon">🚫</div>'
+          +   '<h2>' + (is403 ? '无权访问' : '加载失败') + '</h2>'
+          +   '<p>' + (is403 ? '此页面需要 <b>owner</b> 权限。' : escapeHtml(msg)) + '</p>'
+          +   '<div style="margin-top:18px"><a href="/admin/" class="btn btn-secondary btn-sm">返回总览</a></div>'
+          + '</div>';
+      }
+    }
+
+    // ========== 事件绑定（一次性）==========
+    document.getElementById('closeInvite').addEventListener('click', closeInviteModal);
+    document.getElementById('cancelInvite').addEventListener('click', closeInviteModal);
+    document.getElementById('sendInvite').addEventListener('click', sendInvite);
+    document.getElementById('closeEdit').addEventListener('click', closeEditModal);
+    document.getElementById('cancelEdit').addEventListener('click', closeEditModal);
+    document.getElementById('saveEdit').addEventListener('click', saveEdit);
+    document.getElementById('closePwd').addEventListener('click', closePwdModal);
+    document.getElementById('cancelPwd').addEventListener('click', closePwdModal);
+    document.getElementById('savePwd').addEventListener('click', savePwd);
+    // 点遮罩关闭
+    ['inviteModal', 'editModal', 'pwdModal'].forEach(function (id) {
+      document.getElementById(id).addEventListener('click', function (e) {
+        if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+      });
+    });
+    // ESC 关闭
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        ['inviteModal', 'editModal', 'pwdModal'].forEach(function (id) {
+          const el = document.getElementById(id);
+          if (el && !el.classList.contains('hidden')) el.classList.add('hidden');
+        });
+      }
+    });
+
+    // ========== 启动 ==========
+    (async function init() {
+      // 1) 先拉 me
+      const meReq = await fetch('/api/auth/me', { credentials: 'same-origin' });
+      if (meReq.status === 401) { location.href = '/admin/login.html'; return; }
+      const data = await meReq.json();
+      state.me = data && data.user;
+      state.tenant = data && data.tenant;
+
+      // 2) 解析 URL 上的 ?tenantId
+      const urlParams = new URLSearchParams(location.search);
+      const queryTid = urlParams.get('tenantId');
+      if (queryTid && state.tenant && state.tenant.is_platform_admin) {
+        state.mode = 'foreign';
+        state.tenantId = Number(queryTid);
+      } else {
+        state.mode = 'self';
+      }
+
+      // 3) 顶栏用户信息（仅 self 模式显示）
+      if (state.mode === 'self') renderTopbar();
+
+      // 4) 显隐侧边栏菜单
+      if (state.me && state.me.role === 'owner') {
+        document.querySelectorAll('.owner-only').forEach(function (el) { el.style.display = ''; });
+      }
+      if (state.tenant && state.tenant.is_platform_admin) {
+        document.querySelectorAll('.platform-only').forEach(function (el) { el.style.display = ''; });
+      }
+
+      // 5) 权限拦截：self 模式要求 owner；foreign 模式要求 platform_admin
+      if (state.mode === 'self' && (!state.me || state.me.role !== 'owner')) {
+        renderForbidden();
+        return;
+      }
+      if (state.mode === 'foreign' && !(state.tenant && state.tenant.is_platform_admin)) {
+        renderForbidden();
+        return;
+      }
+
+      // 6) 加载数据
+      await loadAll();
+    })();
+  </script>
+</body>
+</html>

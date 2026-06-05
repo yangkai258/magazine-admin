@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>品牌定制 · 杂志管理平台</title>
+  <link rel="stylesheet" href="/admin/css/style.css">
+  <script src="/admin/js/auth.js"></script>
+  <style>
+    /* 紫色系顶部说明卡片（参考 platform.html） */
+    .branding-hero {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 22px 26px;
+      margin-bottom: 20px;
+      box-shadow: 0 6px 20px rgba(124, 58, 237, 0.18);
+      position: relative;
+      overflow: hidden;
+    }
+    .branding-hero::before {
+      content: "";
+      position: absolute;
+      top: -40px; right: -40px;
+      width: 180px; height: 180px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 50%;
+    }
+    .branding-hero::after {
+      content: "";
+      position: absolute;
+      bottom: -60px; right: 60px;
+      width: 120px; height: 120px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 50%;
+    }
+    .branding-hero h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: relative; z-index: 1;
+    }
+    .branding-hero p {
+      font-size: 13px;
+      line-height: 1.7;
+      opacity: 0.95;
+      position: relative; z-index: 1;
+      max-width: 820px;
+    }
+    .branding-hero .hero-badges {
+      display: inline-flex;
+      gap: 6px;
+      margin-top: 10px;
+      position: relative; z-index: 1;
+    }
+    .branding-hero .hero-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .branding-hero code {
+      background: rgba(255,255,255,0.2);
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+
+    /* 双栏布局 */
+    .branding-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    @media (max-width: 920px) {
+      .branding-grid { grid-template-columns: 1fr; }
+    }
+
+    /* 区块卡 */
+    .branding-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+    .branding-card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .branding-card-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 18px;
+      line-height: 1.6;
+    }
+
+    /* ===== 预览区 ===== */
+    .preview-row {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      flex-wrap: wrap;
+    }
+    .preview-logo-box {
+      width: 160px; height: 160px;
+      border-radius: 12px;
+      border: 2px dashed #d1d5db;
+      background: #fafafa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+    .preview-logo-box:hover { border-color: var(--primary); background: #eef2ff; }
+    .preview-logo-box img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .preview-logo-empty {
+      color: #9ca3af;
+      font-size: 13px;
+      text-align: center;
+      padding: 0 14px;
+    }
+    .preview-logo-empty-emoji { font-size: 36px; margin-bottom: 6px; }
+
+    .preview-meta { flex: 1; min-width: 200px; }
+    .preview-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .preview-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      min-width: 64px;
+    }
+    .preview-value {
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .preview-color-chip {
+      width: 36px; height: 24px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .preview-hex {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* ===== 上传 logo ===== */
+    .upload-area {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .upload-thumb {
+      width: 80px; height: 80px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fafafa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .upload-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .upload-thumb-empty { color: #9ca3af; font-size: 11px; }
+    .upload-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .upload-hint {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-top: 8px;
+    }
+    input[type=file].visually-hidden {
+      position: absolute;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      border: 0;
+    }
+
+    /* ===== 主色选择 ===== */
+    .color-section { margin-top: 6px; }
+    .color-presets {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .color-swatch {
+      width: 48px; height: 48px;
+      border-radius: 10px;
+      cursor: pointer;
+      border: 3px solid transparent;
+      transition: all 0.15s;
+      position: relative;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .color-swatch:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+    .color-swatch.active {
+      border-color: #1f2937;
+      box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1f2937;
+    }
+    .color-swatch.active::after {
+      content: "✓";
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-weight: 700;
+      font-size: 18px;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+    .color-custom {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .color-custom-picker {
+      width: 48px; height: 48px;
+      padding: 2px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+    }
+    .color-custom-input {
+      flex: 1;
+      max-width: 160px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      outline: none;
+    }
+    .color-custom-input:focus { border-color: var(--primary); }
+
+    /* ===== 生效预览样例 ===== */
+    .sample-area {
+      margin-top: 18px;
+      padding: 18px;
+      border-radius: 10px;
+      background: #f9fafb;
+      border: 1px solid var(--border);
+    }
+    .sample-title {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+    .sample-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 14px 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .sample-thumb {
+      width: 48px; height: 36px;
+      background: #eee;
+      border-radius: 4px;
+    }
+    .sample-card-info { flex: 1; }
+    .sample-card-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .sample-card-meta {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .sample-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 500;
+      border: none;
+      cursor: default;
+    }
+    .sample-line {
+      height: 3px;
+      border-radius: 2px;
+      margin-top: 12px;
+      width: 60%;
+    }
+
+    /* 操作区 */
+    .branding-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      align-items: center;
+    }
+    .branding-actions .dirty-mark {
+      font-size: 12px;
+      color: #f59e0b;
+      margin-right: auto;
+    }
+    .branding-actions .dirty-mark.hidden { display: none; }
+
+    /* 平台管理员：租户切换 */
+    .tenant-selector-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding: 14px 18px;
+      background: linear-gradient(135deg, #fef3c7, #fde68a);
+      border: 1px solid #fcd34d;
+      border-radius: 10px;
+      font-size: 13px;
+      color: #78350f;
+    }
+    .tenant-selector-row.hidden { display: none; }
+    .tenant-selector-row select {
+      padding: 6px 10px;
+      border: 1px solid #f59e0b;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+    .tenant-selector-row .tenant-selector-hint {
+      font-size: 11px;
+      color: #92400e;
+      line-height: 1.5;
+    }
+
+    /* 信息提示条 */
+    .info-strip {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 10px 14px;
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #3730a3;
+      line-height: 1.6;
+      margin-top: 16px;
+    }
+    .info-strip-icon { font-size: 14px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <script>MAG_AUTH.requireAuth();</script>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav">
+        <a href="/admin/" class="nav-item" data-page="dashboard">
+          <span class="nav-icon">📊</span> 总览
+        </a>
+        <a href="/admin/magazine/list.html" class="nav-item" data-page="magazine">
+          <span class="nav-icon">📖</span> 杂志管理
+        </a>
+        <a href="/admin/cover/list.html" class="nav-item" data-page="cover">
+          <span class="nav-icon">🖼</span> 封面管理
+        </a>
+        <a href="/admin/branding.html" class="nav-item active" data-page="branding">
+          <span class="nav-icon">🎨</span> 品牌定制
+        </a>
+        <a href="/admin/platform.html" class="nav-item platform-only" data-page="platform" style="display:none">
+          <span class="nav-icon">🏢</span> 平台管理
+        </a>
+        <a href="/admin/audit.html" class="nav-item platform-only" data-page="audit" style="display:none">
+          <span class="nav-icon">📋</span> 审计日志
+        </a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar">
+        <h1 class="page-title">品牌定制</h1>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button>
+      </header>
+      <div class="content-area" id="contentArea">
+        <div class="audit-loading"><div class="spin"></div><div>加载中...</div></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/admin/js/api.js"></script>
+  <script>
+    // ===== 平台管理员才显示「平台管理」「审计日志」菜单 =====
+    MAG_AUTH.getTenant().then(function(t) {
+      if (t && t.is_platform_admin) {
+        document.querySelectorAll('.platform-only').forEach(function(el) { el.style.display = ''; });
+      }
+    });
+
+    // ===== 工具：HTML 转义 =====
+    function escapeHtml(s) {
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // ===== 6 个预设色 =====
+    var PRESET_COLORS = [
+      { value: '#4f46e5', label: '靛紫' },
+      { value: '#2563eb', label: '宝石蓝' },
+      { value: '#059669', label: '翡翠绿' },
+      { value: '#dc2626', label: '朱红' },
+      { value: '#d97706', label: '琥珀橙' },
+      { value: '#7c3aed', label: '葡萄紫' }
+    ];
+
+    // ===== 颜色校验：#RGB / #RRGGBB =====
+    function isValidHex(s) {
+      if (!s) return false;
+      var v = String(s).trim();
+      return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v);
+    }
+
+    // ===== 状态 =====
+    var state = {
+      current: { logo_url: '', primary_color: '#4f46e5' },
+      pendingFile: null,        // 待上传的 File 对象
+      pendingColor: '#4f46e5',  // 待保存的色
+      originalColor: '#4f46e5',
+      originalLogo: '',
+      me: null,
+      allTenants: []            // 平台管理员可见
+    };
+
+    // ===== 无权限卡 =====
+    function renderNoAccess(reason) {
+      var me = state.me;
+      return ''
+        + '<div style="max-width:520px;margin:60px auto;padding:32px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);text-align:center">'
+        +   '<div style="font-size:48px;margin-bottom:12px">🔒</div>'
+        +   '<h2 style="font-size:18px;font-weight:600;margin-bottom:8px;color:var(--text)">无权访问</h2>'
+        +   '<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:20px">'
+        +     '品牌定制仅<strong>租户 owner</strong>可见。' + (reason || '您的当前账号没有 owner 权限。')
+        +   '</p>'
+        +   '<a href="/admin/" class="btn btn-primary">← 返回总览</a>'
+        + '</div>';
+    }
+
+    // ===== Hero 卡 =====
+    function renderHero() {
+      return ''
+        + '<div class="branding-hero">'
+        +   '<h2>🎨 品牌定制 · logo + 主色</h2>'
+        +   '<p>'
+        +     '在此定制当前租户的<strong>品牌 logo</strong>和<strong>主色</strong>，保存后<strong>阅读端立刻可见</strong>（splash / 目录 / 阅读器三页都自动应用）。'
+        +     'logo 推荐 <code>512×512</code> 透明 PNG；主色支持 <code>#RGB</code> / <code>#RRGGBB</code> 十六进制。'
+        +   '</p>'
+        +   '<div class="hero-badges">'
+        +     '<span class="hero-badge">requireRole owner</span>'
+        +     '<span class="hero-badge">PUT /api/admin/branding</span>'
+        +     '<span class="hero-badge">阅读端 live 生效</span>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    // ===== 平台管理员：租户切换 =====
+    function renderTenantSelector() {
+      if (!state.me || !state.me.is_platform_admin) {
+        return '<div class="tenant-selector-row hidden"></div>';
+      }
+      var opts = state.allTenants.map(function(t) {
+        var selected = (t.id === state.me.id) ? ' selected' : '';
+        return '<option value="' + t.id + '" data-slug="' + escapeAttr(t.slug) + '"' + selected + '>' + escapeHtml(t.slug) + ' · ' + escapeHtml(t.name) + '</option>';
+      }).join('');
+      return ''
+        + '<div class="tenant-selector-row" id="tenantSelectorRow">'
+        +   '<div style="font-size:18px">👑</div>'
+        +   '<div style="flex:1">'
+        +     '<div style="font-weight:600;margin-bottom:2px">平台管理员模式</div>'
+        +     '<div class="tenant-selector-hint">'
+        +       '当前在编辑 <strong id="editingTenantName">' + escapeHtml(state.me.name) + '</strong> 的品牌。'
+        +       'API 仅支持编辑当前登录租户；如需编辑其他租户，请用该租户的 owner 账号登录。'
+        +     '</div>'
+        +   '</div>'
+        +   '<div>'
+        +     '<label style="font-size:11px;display:block;margin-bottom:4px;color:#78350f">查看其他租户（只读）</label>'
+        +     '<select id="tenantSelect">' + opts + '</select>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    // ===== 预览卡 =====
+    function renderPreview() {
+      var logoUrl = state.current.logo_url;
+      var color = state.current.primary_color || '#4f46e5';
+      var logoBlock = logoUrl
+        ? '<img id="previewLogoImg" src="' + escapeAttr(logoUrl) + '" alt="logo" onerror="this.parentElement.innerHTML=\'<div class=&quot;preview-logo-empty&quot;><div class=&quot;preview-logo-empty-emoji&quot;>⚠</div>图片加载失败</div>\'">'
+        : '<div class="preview-logo-empty"><div class="preview-logo-empty-emoji">🖼</div>暂无 logo<br><span style="font-size:11px;color:#bbb">使用下方"上传新 logo"添加</span></div>';
+
+      return ''
+        + '<div class="branding-card">'
+        +   '<div class="branding-card-title">👁 当前预览</div>'
+        +   '<div class="branding-card-hint">展示当前租户已保存的 logo 和主色。修改并点击「保存」后会立即更新到阅读端。</div>'
+        +   '<div class="preview-row">'
+        +     '<div class="preview-logo-box" id="previewLogoBox">' + logoBlock + '</div>'
+        +     '<div class="preview-meta">'
+        +       '<div class="preview-meta-row">'
+        +         '<div class="preview-label">租户</div>'
+        +         '<div class="preview-value" id="previewTenantName">' + escapeHtml(state.me ? state.me.name : '-') + '</div>'
+        +       '</div>'
+        +       '<div class="preview-meta-row">'
+        +         '<div class="preview-label">Slug</div>'
+        +         '<div class="preview-value"><code style="background:#f3f4f6;padding:1px 8px;border-radius:3px;font-size:12px">' + escapeHtml(state.me ? state.me.slug : '-') + '</code></div>'
+        +       '</div>'
+        +       '<div class="preview-meta-row">'
+        +         '<div class="preview-label">主色</div>'
+        +         '<div>'
+        +           '<span class="preview-color-chip" id="previewColorChip" style="background:' + escapeAttr(color) + '"></span>'
+        +           '<span class="preview-hex" id="previewColorHex" style="margin-left:8px">' + escapeHtml(color) + '</span>'
+        +         '</div>'
+        +       '</div>'
+        +       '<div class="preview-meta-row">'
+        +         '<div class="preview-label">logo URL</div>'
+        +         '<div class="preview-value" id="previewLogoUrl" style="font-size:11px;color:var(--text-secondary);word-break:break-all;max-width:340px">' + (logoUrl ? escapeHtml(logoUrl) : '<span style="color:#bbb">未设置</span>') + '</div>'
+        +       '</div>'
+        +     '</div>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    // ===== Logo 上传卡 =====
+    function renderUploadCard() {
+      return ''
+        + '<div class="branding-card">'
+        +   '<div class="branding-card-title">📤 上传新 logo</div>'
+        +   '<div class="branding-card-hint">点击「选择文件」挑选新 logo；保存后会替换现有 logo。留空文件输入框 = 不改 logo。</div>'
+        +   '<div class="upload-area">'
+        +     '<div class="upload-thumb" id="uploadThumb"><div class="upload-thumb-empty">未选</div></div>'
+        +     '<div>'
+        +       '<div class="upload-actions">'
+        +         '<input type="file" id="logoFileInput" accept="image/png,image/jpeg,image/svg+xml,image/webp" class="visually-hidden">'
+        +         '<button class="btn btn-primary btn-sm" id="selectFileBtn" type="button">📁 选择文件</button>'
+        +         '<button class="btn btn-secondary btn-sm" id="clearFileBtn" type="button" style="display:none">✕ 清除</button>'
+        +       '</div>'
+        +       '<div class="upload-hint">'
+        +         '支持 PNG / JPG / SVG / WebP，单文件 <strong>≤ 5MB</strong>。'
+        +         '<br>建议 <strong>正方形</strong> 透明 PNG，渲染时自动等比缩放。'
+        +       '</div>'
+        +     '</div>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    // ===== 主色选择卡 =====
+    function renderColorCard() {
+      var currentColor = state.pendingColor;
+      var swatches = PRESET_COLORS.map(function(c) {
+        var active = (c.value.toLowerCase() === currentColor.toLowerCase()) ? ' active' : '';
+        return '<div class="color-swatch' + active + '" data-color="' + c.value + '" title="' + c.label + ' · ' + c.value + '" style="background:' + c.value + '"></div>';
+      }).join('');
+
+      // 自定义值是否匹配预设
+      var isCustom = !PRESET_COLORS.some(function(c) { return c.value.toLowerCase() === currentColor.toLowerCase(); });
+
+      return ''
+        + '<div class="branding-card">'
+        +   '<div class="branding-card-title">🎨 主色选择</div>'
+        +   '<div class="branding-card-hint">选一个预设色，或直接在下方输入 hex 码。修改后下方预览样例会同步更新，保存后阅读端生效。</div>'
+        +   '<div class="color-section">'
+        +     '<div class="color-presets" id="colorPresets">' + swatches + '</div>'
+        +     '<div class="color-custom">'
+        +       '<input type="color" class="color-custom-picker" id="colorPicker" value="' + escapeAttr(isCustom ? currentColor : currentColor) + '">'
+        +       '<input type="text" class="color-custom-input" id="colorHexInput" value="' + escapeAttr(currentColor) + '" placeholder="#4f46e5" maxlength="7" autocomplete="off">'
+        +       '<span style="font-size:12px;color:var(--text-secondary)">（或在此直接输入 hex）</span>'
+        +     '</div>'
+        +   '</div>'
+        // 预览样例
+        +   '<div class="sample-area">'
+        +     '<div class="sample-title">📱 阅读端样例预览</div>'
+        +     '<div class="sample-card">'
+        +       '<div class="sample-thumb"></div>'
+        +       '<div class="sample-card-info">'
+        +         '<div class="sample-card-name">示例杂志名称</div>'
+        +         '<div class="sample-card-meta">示例 · 共 78 页</div>'
+        +       '</div>'
+        +       '<button class="sample-btn" id="sampleBtn" type="button">阅读</button>'
+        +     '</div>'
+        +     '<div class="sample-line" id="sampleLine"></div>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    // ===== 操作区 =====
+    function renderActions() {
+      return ''
+        + '<div class="branding-actions">'
+        +   '<div class="dirty-mark hidden" id="dirtyMark">● 有未保存的修改</div>'
+        +   '<button class="btn btn-secondary" id="resetBtn" type="button">↺ 重置</button>'
+        +   '<button class="btn btn-primary" id="saveBtn" type="button">💾 保存</button>'
+        + '</div>';
+    }
+
+    // ===== 应用主色到样例预览 =====
+    function applySampleColor(color) {
+      var btn = document.getElementById('sampleBtn');
+      var line = document.getElementById('sampleLine');
+      if (btn) btn.style.background = color;
+      if (line) line.style.background = color;
+    }
+
+    // ===== 更新 dirty 标记 =====
+    function refreshDirtyMark() {
+      var dirty = isDirty();
+      var mark = document.getElementById('dirtyMark');
+      if (mark) mark.classList.toggle('hidden', !dirty);
+      var saveBtn = document.getElementById('saveBtn');
+      if (saveBtn) saveBtn.disabled = false;
+    }
+
+    function isDirty() {
+      if (state.pendingFile) return true;
+      return state.pendingColor.toLowerCase() !== state.originalColor.toLowerCase();
+    }
+
+    // ===== 完整渲染 =====
+    function render() {
+      var ca = document.getElementById('contentArea');
+      // 用 try/catch 防御 XSS
+      try {
+        ca.innerHTML = ''
+          + renderHero()
+          + renderTenantSelector()
+          + '<div class="branding-grid">'
+          +   renderPreview()
+          +   renderUploadCard()
+          +   renderColorCard()
+          + '</div>'
+          + renderActions()
+          + '<div class="info-strip">'
+          +   '<div class="info-strip-icon">💡</div>'
+          +   '<div>品牌数据走 <code>/api/admin/branding</code>（GET 取当前值 / PUT multipart 提交）。阅读端从 <code>/api/public/data</code> 读 <code>tenants[i].logo_url + primary_color</code>，所以保存后<strong>无需 publish</strong>，刷新阅读端就生效。</div>'
+          + '</div>';
+
+        // 绑定事件
+        bindEvents();
+        applySampleColor(state.pendingColor);
+        refreshDirtyMark();
+      } catch (e) {
+        console.error('[branding] render failed:', e);
+        ca.innerHTML = '<div style="padding:40px;color:#e53935">渲染失败：' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    // ===== 事件绑定 =====
+    function bindEvents() {
+      // 预设色块
+      document.querySelectorAll('.color-swatch').forEach(function(sw) {
+        sw.addEventListener('click', function() {
+          var c = sw.getAttribute('data-color');
+          state.pendingColor = c;
+          var input = document.getElementById('colorHexInput');
+          if (input) input.value = c;
+          var picker = document.getElementById('colorPicker');
+          if (picker) picker.value = c;
+          document.querySelectorAll('.color-swatch').forEach(function(x) { x.classList.remove('active'); });
+          sw.classList.add('active');
+          applySampleColor(c);
+          refreshDirtyMark();
+        });
+      });
+      // hex 输入
+      var hexInput = document.getElementById('colorHexInput');
+      if (hexInput) {
+        hexInput.addEventListener('input', function() {
+          var v = hexInput.value.trim();
+          if (isValidHex(v)) {
+            state.pendingColor = v.toLowerCase();
+            var picker = document.getElementById('colorPicker');
+            if (picker) picker.value = v;
+            document.querySelectorAll('.color-swatch').forEach(function(x) {
+              if (x.getAttribute('data-color').toLowerCase() === v.toLowerCase()) x.classList.add('active');
+              else x.classList.remove('active');
+            });
+            applySampleColor(state.pendingColor);
+            refreshDirtyMark();
+          }
+        });
+        hexInput.addEventListener('blur', function() {
+          // 失焦时如果输入不合法，提示并恢复
+          var v = hexInput.value.trim();
+          if (!isValidHex(v)) {
+            toast('色值格式无效：' + v + '（应类似 #4f46e5）', 'error');
+            hexInput.value = state.pendingColor;
+          } else {
+            hexInput.value = state.pendingColor;
+          }
+        });
+      }
+      // color picker
+      var picker = document.getElementById('colorPicker');
+      if (picker) {
+        picker.addEventListener('input', function() {
+          state.pendingColor = picker.value.toLowerCase();
+          if (hexInput) hexInput.value = state.pendingColor;
+          document.querySelectorAll('.color-swatch').forEach(function(x) {
+            if (x.getAttribute('data-color').toLowerCase() === state.pendingColor) x.classList.add('active');
+            else x.classList.remove('active');
+          });
+          applySampleColor(state.pendingColor);
+          refreshDirtyMark();
+        });
+      }
+
+      // 文件选择
+      var fileInput = document.getElementById('logoFileInput');
+      var selectBtn = document.getElementById('selectFileBtn');
+      var clearBtn = document.getElementById('clearFileBtn');
+      if (selectBtn) {
+        selectBtn.addEventListener('click', function() { fileInput.click(); });
+      }
+      if (fileInput) {
+        fileInput.addEventListener('change', function() {
+          var f = fileInput.files && fileInput.files[0];
+          if (!f) return;
+          // 前端大小校验（后端 50MB 限制更宽松，但 UI 给个明确提示）
+          if (f.size > 5 * 1024 * 1024) {
+            toast('文件超过 5MB', 'error');
+            fileInput.value = '';
+            return;
+          }
+          state.pendingFile = f;
+          renderUploadThumb(f);
+          if (clearBtn) clearBtn.style.display = '';
+          refreshDirtyMark();
+        });
+      }
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function() {
+          state.pendingFile = null;
+          if (fileInput) fileInput.value = '';
+          var thumb = document.getElementById('uploadThumb');
+          if (thumb) thumb.innerHTML = '<div class="upload-thumb-empty">未选</div>';
+          clearBtn.style.display = 'none';
+          refreshDirtyMark();
+        });
+      }
+
+      // 平台管理员：租户切换（只读）
+      var tenantSelect = document.getElementById('tenantSelect');
+      if (tenantSelect) {
+        tenantSelect.addEventListener('change', function() {
+          var id = Number(tenantSelect.value);
+          var t = state.allTenants.find(function(x) { return x.id === id; });
+          if (!t) return;
+          // 只读模式：把当前表单替换为该租户的预览（不进入 dirty 状态）
+          toast('切换到「' + t.name + '」只读视图。' + (id === state.me.id ? '' : ' 当前账号无该租户 owner 权限，无法编辑。'), 'info');
+          showReadonlyView(t);
+        });
+      }
+
+      // 保存 / 重置
+      var saveBtn = document.getElementById('saveBtn');
+      if (saveBtn) saveBtn.addEventListener('click', onSave);
+      var resetBtn = document.getElementById('resetBtn');
+      if (resetBtn) resetBtn.addEventListener('click', onReset);
+    }
+
+    // ===== 上传缩略图 =====
+    function renderUploadThumb(f) {
+      var thumb = document.getElementById('uploadThumb');
+      if (!thumb) return;
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        thumb.innerHTML = '<img src="' + ev.target.result + '" alt="preview">';
+      };
+      reader.readAsDataURL(f);
+    }
+
+    // ===== 重置 =====
+    function onReset() {
+      if (!isDirty()) { toast('没有可重置的修改', 'info'); return; }
+      state.pendingFile = null;
+      state.pendingColor = state.originalColor;
+      var fileInput = document.getElementById('logoFileInput');
+      if (fileInput) fileInput.value = '';
+      var clearBtn = document.getElementById('clearFileBtn');
+      if (clearBtn) clearBtn.style.display = 'none';
+      render();
+      toast('已重置', 'success');
+    }
+
+    // ===== 保存 =====
+    async function onSave() {
+      if (!isDirty()) { toast('没有可保存的修改', 'info'); return; }
+      var saveBtn = document.getElementById('saveBtn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = '保存中...';
+
+      try {
+        var fd = new FormData();
+        fd.append('primary_color', state.pendingColor);
+        if (state.pendingFile) {
+          fd.append('logo', state.pendingFile);
+        }
+        // 自定义 fetch（PUT + multipart，api.js 没有这个组合）
+        var res = await fetch('/api/admin/branding', {
+          method: 'PUT',
+          body: fd,
+          credentials: 'same-origin'
+        });
+        if (!res.ok) {
+          var errText = await res.text();
+          throw new Error(errText || 'HTTP ' + res.status);
+        }
+        var data = await res.json();
+        // 同步本地 state
+        state.current.logo_url = data.logo_url || state.current.logo_url;
+        state.current.primary_color = data.primary_color || state.current.primary_color;
+        state.originalLogo = state.current.logo_url;
+        state.originalColor = state.current.primary_color.toLowerCase();
+        state.pendingFile = null;
+        state.pendingColor = state.originalColor;
+        // 同时刷新 /me 缓存（因为 tenant.logo_url 也会变）
+        try {
+          var me = await fetch('/api/auth/me', { credentials: 'same-origin' }).then(function(r) { return r.json(); });
+          if (me && me.tenant) {
+            state.me = me.tenant;
+            // 清掉 auth.js 的缓存
+            // （MAG_AUTH 内部状态无法直接清，刷新页面即可，或者下次 getTenant 重新拉）
+          }
+        } catch (e) { /* ignore */ }
+        render();
+        toast('已保存。阅读端刷新即生效。', 'success');
+      } catch (e) {
+        var msg = (e && e.message) || '保存失败';
+        if (/403|ROLE_REQUIRED|owner/.test(msg)) {
+          toast('权限不足：仅 owner 可修改品牌', 'error');
+        } else {
+          toast(msg, 'error');
+        }
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 保存';
+      }
+    }
+
+    // ===== 只读视图（平台管理员切到其他租户）=====
+    function showReadonlyView(t) {
+      var ca = document.getElementById('contentArea');
+      var c = t.primary_color || '#4f46e5';
+      var logoBlock = t.logo_url
+        ? '<img src="' + escapeAttr(t.logo_url) + '" alt="logo" style="max-width:100%;max-height:100%;object-fit:contain">'
+        : '<div class="preview-logo-empty"><div class="preview-logo-empty-emoji">🖼</div>暂无 logo</div>';
+
+      ca.innerHTML = ''
+        + renderHero()
+        + renderTenantSelector()
+        + '<div style="padding:14px 18px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;margin-bottom:18px;font-size:13px;color:#78350f;line-height:1.6">'
+        +   '👀 当前为<strong>只读</strong>视图：展示了租户 <strong>' + escapeHtml(t.name) + '</strong>（' + escapeHtml(t.slug) + '）的品牌数据。'
+        +   '如需编辑，请用该租户的 owner 账号登录。'
+        + '</div>'
+        + '<div class="branding-card">'
+        +   '<div class="branding-card-title">👁 ' + escapeHtml(t.name) + ' · 品牌</div>'
+        +   '<div class="branding-card-hint">只读视图，平台管理员可看任意租户的品牌数据。</div>'
+        +   '<div class="preview-row">'
+        +     '<div class="preview-logo-box">' + logoBlock + '</div>'
+        +     '<div class="preview-meta">'
+        +       '<div class="preview-meta-row">'
+        +         '<div class="preview-label">主色</div>'
+        +         '<div>'
+        +           '<span class="preview-color-chip" style="background:' + escapeAttr(c) + '"></span>'
+        +           '<span class="preview-hex" style="margin-left:8px">' + escapeHtml(c) + '</span>'
+        +         '</div>'
+        +       '</div>'
+        +       '<div class="preview-meta-row">'
+        +         '<div class="preview-label">logo URL</div>'
+        +         '<div class="preview-value" style="font-size:11px;color:var(--text-secondary);word-break:break-all;max-width:340px">' + (t.logo_url ? escapeHtml(t.logo_url) : '<span style="color:#bbb">未设置</span>') + '</div>'
+        +       '</div>'
+        +     '</div>'
+        +   '</div>'
+        +   '<div class="branding-actions">'
+        +     '<a href="/admin/" class="btn btn-secondary">← 返回总览</a>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    // ===== 加载 + 角色校验 =====
+    async function load() {
+      var me;
+      try {
+        me = await MAG_AUTH.getTenant();
+      } catch (e) {
+        document.getElementById('contentArea').innerHTML = renderNoAccess('登录态校验失败。');
+        return;
+      }
+      if (!me) { document.getElementById('contentArea').innerHTML = renderNoAccess('请先登录。'); return; }
+      state.me = me;
+
+      // 角色校验：必须是 owner。后端会再校验一次（requireRole('owner')），这里做前端预检
+      var user = await MAG_AUTH.getUser();
+      if (!user || user.role !== 'owner') {
+        document.getElementById('contentArea').innerHTML = renderNoAccess('您的当前账号角色是 <code>' + escapeHtml(user ? user.role : '?') + '</code>，无修改权限。');
+        return;
+      }
+
+      // 平台管理员：拉所有租户列表（用于切换器）
+      if (me.is_platform_admin) {
+        try {
+          var all = await fetch('/api/public/tenants', { credentials: 'same-origin' }).then(function(r) { return r.json(); });
+          state.allTenants = all || [];
+        } catch (e) {
+          state.allTenants = [me];
+        }
+      }
+
+      // 拉当前 branding
+      try {
+        var b = await api.get('/admin/branding');
+        state.current = { logo_url: b.logo_url || '', primary_color: b.primary_color || '#4f46e5' };
+        state.originalLogo = state.current.logo_url;
+        state.originalColor = state.current.primary_color.toLowerCase();
+        state.pendingColor = state.originalColor;
+        render();
+      } catch (e) {
+        var msg = (e && e.message) || '加载失败';
+        var is403 = /403|ROLE_REQUIRED|owner|无权/.test(msg);
+        if (is403) {
+          document.getElementById('contentArea').innerHTML = renderNoAccess('后端拒绝：需要 owner 权限。');
+        } else {
+          document.getElementById('contentArea').innerHTML =
+            '<div style="max-width:520px;margin:60px auto;padding:32px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);text-align:center">'
+            + '<div style="font-size:48px;margin-bottom:12px">⚠</div>'
+            + '<h2 style="font-size:18px;font-weight:600;margin-bottom:8px;color:var(--text)">加载失败</h2>'
+            + '<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:20px">' + escapeHtml(msg) + '</p>'
+            + '<a href="/admin/" class="btn btn-primary">← 返回总览</a>'
+            + '</div>';
+        }
+      }
+    }
+
+    // 启动
+    load();
+  </script>
+</body>
+</html>

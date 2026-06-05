@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>阅读分析 · 杂志管理平台</title>
+  <link rel="stylesheet" href="/admin/css/style.css">
+  <script src="/admin/js/auth.js"></script>
+  <style>
+    /* 紫色渐变 hero —— 跟 platform.html 同款 */
+    .analytics-hero {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 22px 26px;
+      margin-bottom: 20px;
+      box-shadow: 0 6px 20px rgba(124, 58, 237, 0.18);
+      position: relative;
+      overflow: hidden;
+    }
+    .analytics-hero::before {
+      content: "";
+      position: absolute;
+      top: -40px; right: -40px;
+      width: 180px; height: 180px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 50%;
+    }
+    .analytics-hero::after {
+      content: "";
+      position: absolute;
+      bottom: -60px; right: 60px;
+      width: 120px; height: 120px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 50%;
+    }
+    .analytics-hero h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: relative; z-index: 1;
+    }
+    .analytics-hero p {
+      font-size: 13px;
+      line-height: 1.7;
+      opacity: 0.95;
+      position: relative; z-index: 1;
+      max-width: 820px;
+    }
+    .analytics-hero .hero-badges {
+      display: inline-flex;
+      gap: 6px;
+      margin-top: 10px;
+      position: relative; z-index: 1;
+    }
+    .analytics-hero .hero-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .analytics-hero code {
+      background: rgba(255,255,255,0.2);
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+
+    /* 时间筛选栏：浮在 hero 右下 */
+    .time-filter {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 14px;
+      position: relative; z-index: 1;
+      flex-wrap: wrap;
+    }
+    .time-filter .tf-label {
+      font-size: 12px;
+      opacity: 0.85;
+      margin-right: 4px;
+    }
+    .time-filter .tf-btn {
+      padding: 4px 12px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 14px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .time-filter .tf-btn:hover { background: rgba(255,255,255,0.3); }
+    .time-filter .tf-btn.active {
+      background: #fff;
+      color: #6d28d9;
+      border-color: #fff;
+      font-weight: 600;
+    }
+    .time-filter .tf-custom {
+      display: none;
+      align-items: center;
+      gap: 4px;
+      margin-left: 4px;
+    }
+    .time-filter .tf-custom.show { display: flex; }
+    .time-filter .tf-custom input[type=date] {
+      padding: 3px 6px;
+      font-size: 12px;
+      border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.95);
+      color: #333;
+      outline: none;
+    }
+    .time-filter .tf-custom .tf-apply {
+      padding: 3px 10px;
+      font-size: 12px;
+      background: #fff;
+      color: #6d28d9;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    /* 4 个统计卡 —— 复用 platform.html 的 .tenant-stats 风格但加深颜色 */
+    .analytics-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .analytics-stat {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: var(--shadow);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .analytics-stat:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+    .analytics-stat-icon {
+      width: 44px; height: 44px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .analytics-stat-icon.ic-views   { background: #eef2ff; }
+    .analytics-stat-icon.ic-uv      { background: #dcfce7; }
+    .analytics-stat-icon.ic-complete{ background: #fef3c7; }
+    .analytics-stat-icon.ic-dwell   { background: #fce7f3; }
+    .analytics-stat-num {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+    }
+    .analytics-stat-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    /* 卡片：通用 + 标题行 */
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px 20px;
+      margin-bottom: 20px;
+    }
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .panel-title-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    /* 杂志表格 */
+    .table-wrap td.col-mag-name { font-weight: 600; color: var(--text); }
+    .table-wrap td.col-num {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-secondary);
+    }
+    .table-wrap td.col-num.strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .table-wrap td.col-dwell {
+      text-align: center;
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+    }
+
+    /* 杂志空态 */
+    .empty-mini {
+      padding: 30px 20px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+    .empty-mini .empty-mini-icon {
+      font-size: 36px;
+      margin-bottom: 8px;
+      opacity: 0.5;
+    }
+
+    /* SVG 柱状图：按杂志排行的阅读量 */
+    .bar-chart-wrap {
+      width: 100%;
+      overflow-x: auto;
+    }
+    .bar-chart {
+      width: 100%;
+      min-width: 480px;
+      height: auto;
+      display: block;
+    }
+    .bar-chart .bar-rect {
+      fill: url(#barGradient);
+      transition: opacity 0.2s;
+    }
+    .bar-chart .bar-rect:hover { opacity: 0.85; }
+    .bar-chart .bar-label-name {
+      font-size: 12px;
+      fill: var(--text);
+      font-weight: 500;
+    }
+    .bar-chart .bar-label-value {
+      font-size: 11px;
+      fill: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+    .bar-chart .bar-axis-line {
+      stroke: var(--border);
+      stroke-width: 1;
+    }
+    .bar-chart .bar-grid-line {
+      stroke: #f3f4f6;
+      stroke-width: 1;
+      stroke-dasharray: 3 3;
+    }
+
+    /* 工具栏：刷新 + 当前窗口提示 */
+    .analytics-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .analytics-toolbar .window-info {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-left: auto;
+    }
+    .analytics-toolbar .window-info code {
+      background: #f3f4f6;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    /* 错误 / 加载态 */
+    .analytics-error {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--danger);
+      font-size: 13px;
+    }
+    .analytics-loading {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <script>MAG_AUTH.requireAuth();</script>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav">
+        <a href="/admin/" class="nav-item" data-page="dashboard">
+          <span class="nav-icon">📊</span> 总览
+        </a>
+        <a href="/admin/magazine/list.html" class="nav-item" data-page="magazine">
+          <span class="nav-icon">📖</span> 杂志管理
+        </a>
+        <a href="/admin/cover/list.html" class="nav-item" data-page="cover">
+          <span class="nav-icon">🖼</span> 封面管理
+        </a>
+        <a href="/admin/analytics.html" class="nav-item active" data-page="analytics">
+          <span class="nav-icon">📈</span> 阅读分析
+        </a>
+        <a href="/admin/platform.html" class="nav-item platform-only" data-page="platform" style="display:none">
+          <span class="nav-icon">🏢</span> 平台管理
+        </a>
+        <a href="/admin/audit.html" class="nav-item platform-only" data-page="audit" style="display:none">
+          <span class="nav-icon">📋</span> 审计日志
+        </a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar">
+        <h1 class="page-title">阅读分析</h1>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button>
+      </header>
+      <div class="content-area" id="contentArea">
+
+        <!-- Hero 渐变卡：标题 + 时间筛选 -->
+        <div class="analytics-hero">
+          <h2>📈 阅读数据分析</h2>
+          <p>
+            这里是阅读端的<strong>用户行为看板</strong>，实时汇总本租户杂志的浏览量、独立访客、完读数与平均阅读时长。
+            Reader 端在 <code>splash.html</code> / <code>directory.html</code> / <code>viewer.html</code> 自动埋点（view / dwell / complete），
+            通过 <code>POST /api/public/analytics/track</code> 上报；本页通过 <code>GET /api/admin/analytics?since=…</code> 拉取汇总。
+            <strong>owner 和 editor 都能访问</strong>，非平台管理员页面。
+          </p>
+          <div class="hero-badges">
+            <span class="hero-badge">requireAuth</span>
+            <span class="hero-badge">tenant 隔离</span>
+            <span class="hero-badge">view / dwell / complete</span>
+          </div>
+
+          <!-- 时间筛选 -->
+          <div class="time-filter" id="timeFilter">
+            <span class="tf-label">时间窗口：</span>
+            <button class="tf-btn" data-days="7">7 天</button>
+            <button class="tf-btn active" data-days="30">30 天</button>
+            <button class="tf-btn" data-days="90">90 天</button>
+            <button class="tf-btn" data-days="custom">自定义</button>
+            <div class="tf-custom" id="tfCustom">
+              <input type="date" id="tfStart">
+              <span style="opacity:0.8">至</span>
+              <input type="date" id="tfEnd">
+              <button class="tf-apply" id="tfApply">应用</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 个统计卡 -->
+        <div class="analytics-stats" id="statsRow">
+          <div class="analytics-stat">
+            <div class="analytics-stat-icon ic-views">👁</div>
+            <div>
+              <div class="analytics-stat-num" id="statViews">--</div>
+              <div class="analytics-stat-label">总阅读量（次）</div>
+            </div>
+          </div>
+          <div class="analytics-stat">
+            <div class="analytics-stat-icon ic-uv">👤</div>
+            <div>
+              <div class="analytics-stat-num" id="statUV">--</div>
+              <div class="analytics-stat-label">独立访客（人）</div>
+            </div>
+          </div>
+          <div class="analytics-stat">
+            <div class="analytics-stat-icon ic-complete">✅</div>
+            <div>
+              <div class="analytics-stat-num" id="statComplete">--</div>
+              <div class="analytics-stat-label">完读数（次）</div>
+            </div>
+          </div>
+          <div class="analytics-stat">
+            <div class="analytics-stat-icon ic-dwell">⏱</div>
+            <div>
+              <div class="analytics-stat-num" id="statDwell">--</div>
+              <div class="analytics-stat-label">平均阅读时长</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 工具栏：刷新 + 当前窗口提示 -->
+        <div class="analytics-toolbar">
+          <button class="btn btn-secondary btn-sm" id="refreshBtn">↻ 刷新</button>
+          <span class="window-info">
+            当前窗口：<code id="windowLabel">最近 30 天</code>
+            <span style="margin: 0 6px">·</span>
+            <code id="windowSince">--</code> ~ <code id="windowNow">--</code>
+          </span>
+        </div>
+
+        <!-- 杂志排行柱状图 -->
+        <div class="panel">
+          <div class="panel-title">
+            <span>📊 杂志阅读量排行</span>
+            <span class="panel-title-hint" id="chartHint">--</span>
+          </div>
+          <div class="bar-chart-wrap" id="chartWrap">
+            <div class="analytics-loading">加载中…</div>
+          </div>
+        </div>
+
+        <!-- 杂志明细表 -->
+        <div class="panel">
+          <div class="panel-title">
+            <span>📋 杂志明细</span>
+            <span class="panel-title-hint">按时段内阅读量降序</span>
+          </div>
+          <div class="table-wrap" style="border:none;box-shadow:none">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:60px">#</th>
+                  <th>杂志名</th>
+                  <th style="text-align:center">阅读量</th>
+                  <th style="text-align:center">独立访客</th>
+                  <th style="text-align:center">完读数</th>
+                  <th style="text-align:center">平均时长</th>
+                </tr>
+              </thead>
+              <tbody id="magTable"></tbody>
+            </table>
+          </div>
+          <div id="emptyMag" class="empty-mini" style="display:none">
+            <div class="empty-mini-icon">📭</div>
+            <div>所选时段内暂无阅读数据</div>
+            <div style="font-size:11px;margin-top:4px;opacity:0.7">提示：让访客打开阅读端页面即可产生 view / dwell / complete 埋点</div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="/admin/js/api.js"></script>
+  <script>
+    // 平台管理员才显示「平台管理」「审计日志」
+    MAG_AUTH.getTenant().then(function (t) {
+      if (t && t.is_platform_admin) {
+        document.querySelectorAll('.platform-only').forEach(function (el) { el.style.display = ''; });
+      }
+    });
+
+    // ========== 工具 ==========
+
+    // ms → 「X 分 Y 秒」/ 「Y 秒」
+    function formatDwell(ms) {
+      if (!ms || ms <= 0) return '0 秒';
+      var totalSec = Math.round(ms / 1000);
+      if (totalSec < 60) return totalSec + ' 秒';
+      var min = Math.floor(totalSec / 60);
+      var sec = totalSec % 60;
+      return min + ' 分 ' + sec + ' 秒';
+    }
+
+    // ISO → 「YYYY-MM-DD HH:mm」
+    function formatShort(iso) {
+      if (!iso) return '--';
+      return String(iso).replace('T', ' ').slice(0, 16);
+    }
+
+    // 「N 天前」对应 ISO（保留时分秒为当前本地时间）
+    function daysAgoISO(days) {
+      var d = new Date();
+      d.setDate(d.getDate() - days);
+      return d.toISOString();
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    // ========== 状态 ==========
+    var state = {
+      days: 30,            // 7 / 30 / 90 / custom
+      customStart: null,   // Date
+      customEnd: null,     // Date
+      data: null           // API 响应
+    };
+
+    // 计算当前窗口的 since（ISO）
+    function currentSince() {
+      if (state.days === 'custom' && state.customStart) {
+        return new Date(state.customStart).toISOString();
+      }
+      var n = Number(state.days);
+      if (!isFinite(n) || n <= 0) n = 30;
+      return daysAgoISO(n);
+    }
+    function currentLabel() {
+      if (state.days === 'custom' && state.customStart && state.customEnd) {
+        return state.customStart.slice(0, 10) + ' ~ ' + state.customEnd.slice(0, 10);
+      }
+      return '最近 ' + state.days + ' 天';
+    }
+
+    // ========== 时间筛选 UI ==========
+    function bindTimeFilter() {
+      var btns = document.querySelectorAll('#timeFilter .tf-btn');
+      btns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          btns.forEach(function (b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          var v = btn.getAttribute('data-days');
+          if (v === 'custom') {
+            document.getElementById('tfCustom').classList.add('show');
+            return;  // 等用户点「应用」
+          }
+          document.getElementById('tfCustom').classList.remove('show');
+          state.days = Number(v);
+          loadAnalytics();
+        });
+      });
+      document.getElementById('tfApply').addEventListener('click', function () {
+        var s = document.getElementById('tfStart').value;
+        var e = document.getElementById('tfEnd').value;
+        if (!s || !e) { toast('请选择起止日期', 'error'); return; }
+        if (new Date(s) > new Date(e)) { toast('起始日期不能晚于结束', 'error'); return; }
+        state.customStart = s;
+        state.customEnd = e;
+        state.days = 'custom';
+        loadAnalytics();
+      });
+    }
+
+    // ========== 加载数据 ==========
+    async function loadAnalytics() {
+      var since = currentSince();
+      document.getElementById('windowLabel').textContent = currentLabel();
+      document.getElementById('windowSince').textContent = formatShort(since);
+      document.getElementById('windowNow').textContent = formatShort(new Date().toISOString());
+
+      // loading 态
+      document.getElementById('chartWrap').innerHTML = '<div class="analytics-loading">加载中…</div>';
+      document.getElementById('magTable').innerHTML = '';
+      document.getElementById('emptyMag').style.display = 'none';
+
+      var data;
+      try {
+        // api.get(path) 会自动拼 /api 前缀 → 最终请求 /api/admin/analytics?since=…
+        data = await api.get('/admin/analytics?since=' + encodeURIComponent(since));
+      } catch (e) {
+        var msg = e && e.message ? e.message : '网络错误';
+        document.getElementById('chartWrap').innerHTML =
+          '<div class="analytics-error">❌ 加载失败：' + escapeHtml(msg) + '<br><span style="font-size:12px;color:#999">提示：检查后端 /api/admin/analytics 是否就绪</span></div>';
+        // 统计卡保留 -- 显示
+        return;
+      }
+      state.data = data || {};
+
+      // 顺手拉一次杂志列表，用于把 magazine_id 翻译成 name（API 不带 name）
+      var nameMap = {};
+      try {
+        var mags = await api.get('/magazines');
+        (mags || []).forEach(function (m) { nameMap[m.id] = m.name; });
+      } catch (e) { /* 拉不到也无所谓，UI 会显示「杂志 #X」 */ }
+
+      renderStats(data.summary || {});
+      renderMagTable(data.by_magazine || [], nameMap);
+      renderBarChart(data.by_magazine || [], nameMap);
+    }
+
+    // ========== 渲染 4 个统计卡 ==========
+    function renderStats(s) {
+      document.getElementById('statViews').textContent    = (s.total_views    != null ? s.total_views    : 0).toLocaleString();
+      document.getElementById('statUV').textContent       = (s.unique_viewers != null ? s.unique_viewers : 0).toLocaleString();
+      document.getElementById('statComplete').textContent = (s.completes      != null ? s.completes      : 0).toLocaleString();
+      document.getElementById('statDwell').textContent    = formatDwell(s.avg_dwell_ms || 0);
+    }
+
+    // ========== 渲染杂志明细表 ==========
+    function renderMagTable(list, nameMap) {
+      var tbody = document.getElementById('magTable');
+      var empty = document.getElementById('emptyMag');
+      if (!list.length) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+      tbody.innerHTML = list.map(function (m, i) {
+        // 优先用后端返回的 name，否则用 id 显示「杂志 #X」
+        var name = (nameMap && nameMap[m.magazine_id]) || ('杂志 #' + m.magazine_id);
+        return '<tr>' +
+          '<td style="color:var(--text-secondary);font-variant-numeric:tabular-nums">' + (i + 1) + '</td>' +
+          '<td class="col-mag-name">' + escapeHtml(name) + '</td>' +
+          '<td class="col-num strong">' + (m.views || 0) + '</td>' +
+          '<td class="col-num">' + (m.unique_viewers || 0) + '</td>' +
+          '<td class="col-num">' + (m.completes || 0) + '</td>' +
+          '<td class="col-dwell">' + formatDwell(m.avg_dwell_ms || 0) + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    // ========== 渲染 SVG 柱状图 ==========
+    function renderBarChart(list, nameMap) {
+      var wrap = document.getElementById('chartWrap');
+      var hint = document.getElementById('chartHint');
+      if (!list.length) {
+        wrap.innerHTML = '<div class="empty-mini"><div class="empty-mini-icon">📭</div>所选时段内暂无阅读数据</div>';
+        hint.textContent = '0 本杂志';
+        return;
+      }
+      hint.textContent = '共 ' + list.length + ' 本';
+
+      // 准备数据：按 views 降序
+      var data = list.slice().sort(function (a, b) { return (b.views || 0) - (a.views || 0); });
+      var maxViews = Math.max.apply(null, data.map(function (m) { return m.views || 0; }));
+      if (maxViews <= 0) maxViews = 1;
+
+      // 画布尺寸
+      var rowH = 36;             // 每行高
+      var labelW = 160;          // 左侧杂志名宽度
+      var valueW = 60;           // 右侧数值宽度
+      var chartW = 480;          // 柱条区域最小宽度
+      var padTop = 16;
+      var padBottom = 16;
+      var totalW = labelW + chartW + valueW + 24;  // 24 = 左右 padding
+      var totalH = padTop + data.length * rowH + padBottom;
+
+      // 网格刻度（4 段：0% / 25% / 50% / 75% / 100%）
+      var ticks = [];
+      for (var t = 0; t <= 4; t++) {
+        var ratio = t / 4;
+        ticks.push({
+          ratio: ratio,
+          x: labelW + 12 + ratio * chartW,
+          label: Math.round(maxViews * ratio).toString()
+        });
+      }
+
+      var svgParts = [];
+      svgParts.push('<svg class="bar-chart" viewBox="0 0 ' + totalW + ' ' + totalH + '" preserveAspectRatio="xMinYMin meet" xmlns="http://www.w3.org/2000/svg">');
+      // 渐变定义
+      svgParts.push(
+        '<defs>' +
+          '<linearGradient id="barGradient" x1="0" y1="0" x2="1" y2="0">' +
+            '<stop offset="0%" stop-color="#4f46e5"/>' +
+            '<stop offset="100%" stop-color="#a855f7"/>' +
+          '</linearGradient>' +
+        '</defs>'
+      );
+
+      // 网格虚线 + 刻度
+      ticks.forEach(function (tk) {
+        svgParts.push(
+          '<line class="bar-grid-line" x1="' + tk.x + '" y1="' + padTop + '" x2="' + tk.x + '" y2="' + (totalH - padBottom) + '"></line>' +
+          '<text class="bar-label-value" x="' + tk.x + '" y="' + (padTop - 4) + '" text-anchor="middle">' + tk.label + '</text>'
+        );
+      });
+
+      // 每行
+      data.forEach(function (m, i) {
+        var y = padTop + i * rowH;
+        var barH = 20;
+        var barY = y + (rowH - barH) / 2;
+        var name = (nameMap && nameMap[m.magazine_id]) || ('杂志 #' + m.magazine_id);
+        // 截断超长杂志名
+        if (name.length > 16) name = name.slice(0, 15) + '…';
+        var views = m.views || 0;
+        var w = (views / maxViews) * chartW;
+        if (w < 1 && views > 0) w = 1;
+
+        // 杂志名
+        svgParts.push(
+          '<text class="bar-label-name" x="' + (labelW - 8) + '" y="' + (y + rowH / 2) + '" text-anchor="end" dominant-baseline="middle">' +
+            escapeHtml(name) +
+          '</text>'
+        );
+        // 柱条
+        svgParts.push(
+          '<rect class="bar-rect" x="' + (labelW + 12) + '" y="' + barY + '" width="' + w + '" height="' + barH + '" rx="4" ry="4">' +
+            '<title>杂志 #' + m.magazine_id + ' · 阅读 ' + views + ' · 独立访客 ' + (m.unique_viewers || 0) + ' · 完读 ' + (m.completes || 0) + '</title>' +
+          '</rect>'
+        );
+        // 数值
+        svgParts.push(
+          '<text class="bar-label-value" x="' + (labelW + 12 + w + 6) + '" y="' + (y + rowH / 2) + '" dominant-baseline="middle" style="font-weight:600;fill:#4f46e5">' +
+            views.toLocaleString() +
+          '</text>'
+        );
+      });
+
+      // 底部 X 轴线
+      svgParts.push(
+        '<line class="bar-axis-line" x1="' + (labelW + 12) + '" y1="' + (totalH - padBottom) + '" x2="' + (labelW + 12 + chartW) + '" y2="' + (totalH - padBottom) + '"></line>'
+      );
+
+      svgParts.push('</svg>');
+      wrap.innerHTML = svgParts.join('');
+    }
+
+    // ========== 启动 ==========
+    document.getElementById('refreshBtn').addEventListener('click', loadAnalytics);
+    bindTimeFilter();
+    // 初始化自定义日期 input 默认为 30 天窗口
+    (function () {
+      var end = new Date();
+      var start = new Date();
+      start.setDate(start.getDate() - 30);
+      document.getElementById('tfEnd').value = end.toISOString().slice(0, 10);
+      document.getElementById('tfStart').value = start.toISOString().slice(0, 10);
+    })();
+    loadAnalytics();
+  </script>
+</body>
+</html>

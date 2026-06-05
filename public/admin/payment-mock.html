@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>模拟支付</title>
+  <link rel="stylesheet" href="/admin/css/style.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+      margin: 0;
+    }
+    .mock-pay-wrap {
+      max-width: 460px;
+      width: 90%;
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 12px 40px rgba(124, 58, 237, 0.18);
+      padding: 36px 32px;
+      text-align: center;
+    }
+    .mock-pay-icon {
+      font-size: 56px;
+      margin-bottom: 10px;
+    }
+    .mock-pay-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .mock-pay-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 22px;
+      line-height: 1.6;
+    }
+    .mock-pay-card {
+      background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+      text-align: left;
+    }
+    .mock-pay-card .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      font-size: 13px;
+    }
+    .mock-pay-card .row + .row { border-top: 1px dashed var(--border); }
+    .mock-pay-card .label { color: var(--text-secondary); }
+    .mock-pay-card .value { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .mock-pay-card .value.amount { font-size: 18px; color: #4f46e5; }
+    .mock-pay-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .mock-pay-actions .btn { width: 100%; justify-content: center; padding: 12px 20px; font-size: 14px; }
+    .mock-pay-actions .btn-cancel { background: #f3f4f6; color: var(--text); }
+    .mock-pay-actions .btn-cancel:hover { background: #e5e7eb; }
+    .mock-pay-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 16px;
+      padding: 10px 12px;
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      border-radius: 6px;
+      line-height: 1.6;
+    }
+    .mock-pay-done {
+      display: none;
+    }
+    .mock-pay-done.show { display: block; }
+    .mock-pay-done .check {
+      width: 64px; height: 64px;
+      margin: 0 auto 14px;
+      border-radius: 50%;
+      background: #dcfce7;
+      color: #166534;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 700;
+    }
+    .mock-pay-error {
+      display: none;
+    }
+    .mock-pay-error.show { display: block; }
+    .mock-pay-error .err {
+      color: #991b1b;
+      font-size: 13px;
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="mock-pay-wrap">
+    <!-- 初始：确认支付 -->
+    <div id="initialBlock">
+      <div class="mock-pay-icon" id="payIcon">💳</div>
+      <h1 class="mock-pay-title">模拟支付</h1>
+      <p class="mock-pay-subtitle">
+        这是<strong>开发 mock 模式</strong>下的支付确认页。<br>
+        真实接入支付宝 / 微信商户后，本页会被替换为对应支付网关。
+      </p>
+      <div class="mock-pay-card">
+        <div class="row">
+          <span class="label">订单号（Invoice）</span>
+          <span class="value" id="invoiceId">--</span>
+        </div>
+        <div class="row">
+          <span class="label">支付方式</span>
+          <span class="value" id="payMethod">--</span>
+        </div>
+        <div class="row">
+          <span class="label">支付金额</span>
+          <span class="value amount" id="payAmount">¥--</span>
+        </div>
+      </div>
+      <div class="mock-pay-actions">
+        <button class="btn btn-primary" id="confirmPayBtn" type="button">✓ 确认支付</button>
+        <button class="btn btn-cancel" id="cancelBtn" type="button">取消并返回</button>
+      </div>
+      <div class="mock-pay-hint">
+        ⚠️ 本页面只在 <code>mock</code> 模式下显示，<strong>请勿在生产环境使用</strong>。
+      </div>
+    </div>
+
+    <!-- 成功 -->
+    <div class="mock-pay-done" id="successBlock">
+      <div class="check">✓</div>
+      <h1 class="mock-pay-title">支付成功</h1>
+      <p class="mock-pay-subtitle">
+        套餐已自动激活。<br>
+        正在跳转回「订阅与计费」页面…
+      </p>
+    </div>
+
+    <!-- 错误 -->
+    <div class="mock-pay-error" id="errorBlock">
+      <div class="mock-pay-icon">⚠️</div>
+      <h1 class="mock-pay-title">支付失败</h1>
+      <div class="err" id="errorMsg">--</div>
+      <div class="mock-pay-actions">
+        <button class="btn btn-primary" id="retryBtn" type="button">重试</button>
+        <button class="btn btn-cancel" id="backBtn" type="button">返回账单</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== 解析 URL 参数 =====
+    var params = new URLSearchParams(location.search);
+    var invoiceId = params.get('invoice');
+    var method = (params.get('method') || 'mock').toLowerCase();
+
+    // 把 method 翻译成人话 + emoji
+    var methodLabel = method === 'alipay' ? '💙 支付宝'
+                    : method === 'wechat' ? '💚 微信支付'
+                    : '模拟支付';
+
+    document.getElementById('invoiceId').textContent = invoiceId ? '#' + invoiceId : '未知';
+    document.getElementById('payMethod').innerHTML = methodLabel;
+    document.getElementById('payIcon').textContent = method === 'alipay' ? '💙'
+                                                  : method === 'wechat' ? '💚'
+                                                  : '💳';
+
+    // 金额：调一次 invoice 详情（可选）。如果失败就显示「--」
+    fetch('/api/admin/invoices', { credentials: 'same-origin' })
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(list) {
+        var inv = list.find(function(x) { return String(x.id) === String(invoiceId); });
+        if (inv) {
+          document.getElementById('payAmount').textContent = '¥' + (inv.amount_cny || 0);
+        }
+      })
+      .catch(function() { /* 静默失败，金额显示 ¥-- */ });
+
+    // ===== 鉴权：必须是 owner（前端预检）=====
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then(function(res) {
+        if (res.status === 401) { location.href = '/admin/login.html'; return null; }
+        return res.json();
+      })
+      .then(function(data) {
+        if (data && data.user && data.user.role !== 'owner') {
+          showError('当前账号不是 owner，无权完成支付');
+        }
+      })
+      .catch(function() { /* 让后续 API 错误兜底 */ });
+
+    // ===== 确认支付 =====
+    document.getElementById('confirmPayBtn').addEventListener('click', function() {
+      if (!invoiceId) { showError('订单号缺失'); return; }
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = '处理中…';
+      fetch('/api/admin/payment/mock-paid', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_id: Number(invoiceId) })
+      })
+      .then(function(res) {
+        if (!res.ok) return res.text().then(function(t) { throw new Error(t); });
+        return res.json();
+      })
+      .then(function() {
+        showSuccess();
+        setTimeout(function() { location.href = '/admin/billing.html'; }, 1500);
+      })
+      .catch(function(e) { showError(e && e.message ? e.message : '支付失败'); })
+      .finally(function() { btn.disabled = false; btn.textContent = '✓ 确认支付'; });
+    });
+
+    document.getElementById('cancelBtn').addEventListener('click', function() {
+      location.href = '/admin/billing.html';
+    });
+    document.getElementById('retryBtn').addEventListener('click', function() {
+      hideAll();
+      document.getElementById('initialBlock').style.display = 'block';
+    });
+    document.getElementById('backBtn').addEventListener('click', function() {
+      location.href = '/admin/billing.html';
+    });
+
+    function hideAll() {
+      document.getElementById('initialBlock').style.display = 'none';
+      document.getElementById('successBlock').classList.remove('show');
+      document.getElementById('errorBlock').classList.remove('show');
+    }
+    function showSuccess() {
+      hideAll();
+      document.getElementById('successBlock').classList.add('show');
+    }
+    function showError(msg) {
+      hideAll();
+      document.getElementById('errorMsg').textContent = msg;
+      document.getElementById('errorBlock').classList.add('show');
+    }
+  </script>
+</body>
+</html>

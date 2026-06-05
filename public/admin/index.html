@@ -6,12 +6,108 @@
   <title>杂志管理平台</title>
   <link rel="stylesheet" href="/admin/css/style.css">
   <script src="/admin/js/auth.js"></script>
+  <style>
+    /* 侧边栏：租户 logo + 名字（替代硬编码「杂志管理平台」） */
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 18px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .sidebar-logo-img {
+      width: 32px; height: 32px;
+      border-radius: 6px;
+      object-fit: contain;
+      background: rgba(255,255,255,0.08);
+      flex-shrink: 0;
+    }
+    .sidebar-logo-fallback {
+      width: 32px; height: 32px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .sidebar-logo-text {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 150px;
+    }
+    .sidebar-logo-sub {
+      font-size: 10px;
+      font-weight: 400;
+      color: rgba(255,255,255,0.5);
+      margin-top: 2px;
+      letter-spacing: 0.5px;
+    }
+
+    /* 顶栏：租户徽标（logo + 名字） */
+    .tenant-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px 5px 6px;
+      border-radius: 999px;
+      background: #f3f4f6;
+      border: 1px solid var(--border);
+      margin-right: 12px;
+      max-width: 260px;
+    }
+    .tenant-badge-img {
+      width: 24px; height: 24px;
+      border-radius: 4px;
+      object-fit: contain;
+      background: #fff;
+      flex-shrink: 0;
+    }
+    .tenant-badge-fallback {
+      width: 24px; height: 24px;
+      border-radius: 4px;
+      background: var(--primary);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .tenant-badge-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tenant-badge-name code {
+      font-size: 10px;
+      color: var(--text-secondary);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      margin-left: 4px;
+    }
+  </style>
 </head>
 <body>
   <script>MAG_AUTH.requireAuth();</script>
   <div class="admin-layout">
     <aside class="sidebar">
-      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <div class="sidebar-logo" id="sidebarLogo">
+        <div class="sidebar-logo-fallback">📚</div>
+        <div style="min-width:0">
+          <div class="sidebar-logo-text" id="sidebarLogoText">杂志管理平台</div>
+          <div class="sidebar-logo-sub" id="sidebarLogoSub">SaaS · v4</div>
+        </div>
+      </div>
       <nav class="sidebar-nav">
         <a href="/admin/" class="nav-item active" data-page="dashboard">
           <span class="nav-icon">📊</span> 总览
@@ -22,18 +118,35 @@
         <a href="/admin/cover/list.html" class="nav-item" data-page="cover">
           <span class="nav-icon">🖼</span> 封面管理
         </a>
+        <a href="/admin/branding.html" class="nav-item" data-page="branding">
+          <span class="nav-icon">🎨</span> 品牌定制
+        </a>
         <a href="/admin/platform.html" class="nav-item platform-only" data-page="platform" style="display:none">
           <span class="nav-icon">🏢</span> 平台管理
         </a>
         <a href="/admin/audit.html" class="nav-item platform-only" data-page="audit" style="display:none">
           <span class="nav-icon">📋</span> 审计日志
         </a>
+        <a href="/admin/email-log.html" class="nav-item platform-only" data-page="email-log" style="display:none">
+          <span class="nav-icon">📧</span> 邮件日志
+        </a>
+        <a href="/admin/tenant-users.html" class="nav-item owner-only" data-page="tenant-users" style="display:none">
+          <span class="nav-icon">👥</span> 用户管理
+        </a>
       </nav>
     </aside>
     <main class="main-content">
       <header class="top-bar">
         <h1 class="page-title">总览</h1>
-        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button>
+        <div id="topbarUserInfo" style="display:flex;align-items:center;gap:8px;margin-left:auto;margin-right:12px;font-size:13px;color:var(--text-secondary)">
+          <span>欢迎，<b style="color:var(--text)" id="tbEmail">--</b></span>
+          <span id="tbRoleChip" class="chip-role chip-role-viewer" style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;background:#f3f4f6;color:#4b5563;border:1px solid #e5e7eb">--</span>
+        </div>
+        <div class="tenant-badge" id="tenantBadge" title="">
+          <div class="tenant-badge-fallback" id="tenantBadgeFallback">📚</div>
+          <div class="tenant-badge-name" id="tenantBadgeName">--<code></code></div>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-left:0" onclick="MAG_AUTH.logout()">退出登录</button>
       </header>
       <div class="content-area" id="contentArea">
         <div class="dashboard-cards">
@@ -83,7 +196,124 @@
       if (t && t.is_platform_admin) {
         document.querySelectorAll('.platform-only').forEach(function(el) { el.style.display = ''; });
       }
+      // 填充租户品牌到顶栏 + 侧边栏（替代硬编码「杂志管理平台」）
+      // 注：/api/auth/me 在 attachSession 已透出 logo_url + primary_color；
+      //     但 session 是 login 时缓存的，用户改品牌后未重新登录会拿到旧值。
+      //     所以这里再调一次 /api/admin/branding 拿最新值（不依赖 session 缓存）。
+      initBranding(t);
     });
+
+    // ===== 顶栏 + 侧边栏：填充租户 logo / 名字 =====
+    async function initBranding(tenant) {
+      if (!tenant) return;
+      // 总是从 /api/admin/branding 拿最新值（不依赖 /api/auth/me 的 session 缓存）
+      // 原因：用户改品牌后 session 还是旧值，/me 会返回旧 logo/color；
+      //       /admin/branding 走 db 直查，每次都是最新。
+      try {
+        const b = await api.get('/admin/branding');
+        if (b) {
+          tenant.logo_url = b.logo_url || '';
+          tenant.primary_color = b.primary_color || '#4f46e5';
+        }
+      } catch (e) {
+        // 拿不到（401 / 500）就用 /me 透出的字段或默认值
+        if (!tenant.logo_url) tenant.logo_url = '';
+        if (!tenant.primary_color) tenant.primary_color = '#4f46e5';
+      }
+      renderTenantBranding(tenant);
+    }
+
+    // 顶栏用户信息：欢迎 + 角色徽章；owner 显示「用户管理」菜单
+    MAG_AUTH.getUser().then(function(u) {
+      if (!u) return;
+      var emailEl = document.getElementById('tbEmail');
+      var chipEl  = document.getElementById('tbRoleChip');
+      if (emailEl) emailEl.textContent = u.email || '';
+      if (chipEl) {
+        var role = u.role || 'viewer';
+        chipEl.textContent = role.toUpperCase();
+        chipEl.className = 'chip-role chip-role-' + role;
+        // 三色 chip 内联样式（与 tenant-users.html 保持一致）
+        chipEl.style.display = 'inline-block';
+        chipEl.style.padding = '3px 10px';
+        chipEl.style.borderRadius = '12px';
+        chipEl.style.fontSize = '11px';
+        chipEl.style.fontWeight = '600';
+        if (role === 'owner') {
+          chipEl.style.background = 'linear-gradient(135deg,#ede9fe,#ddd6fe)';
+          chipEl.style.color = '#6d28d9';
+          chipEl.style.border = '1px solid #c4b5fd';
+        } else if (role === 'editor') {
+          chipEl.style.background = '#dbeafe';
+          chipEl.style.color = '#1e40af';
+          chipEl.style.border = '1px solid #bfdbfe';
+        } else {
+          chipEl.style.background = '#f3f4f6';
+          chipEl.style.color = '#4b5563';
+          chipEl.style.border = '1px solid #e5e7eb';
+        }
+      }
+      // owner 才显示「用户管理」菜单
+      if (u.role === 'owner') {
+        document.querySelectorAll('.owner-only').forEach(function(el) { el.style.display = ''; });
+      }
+    });
+
+    // ===== 顶栏 + 侧边栏：填充租户 logo / 名字 =====
+    function renderTenantBranding(tenant) {
+      if (!tenant) return;
+      var name = tenant.name || '杂志管理平台';
+      var slug = tenant.slug || '';
+      var logoUrl = tenant.logo_url || '';
+      var color = tenant.primary_color || '#4f46e5';
+      // 顶栏徽标
+      var badgeName = document.getElementById('tenantBadgeName');
+      if (badgeName) {
+        badgeName.innerHTML = '';
+        var span = document.createElement('span');
+        span.textContent = name;
+        badgeName.appendChild(span);
+        if (slug) {
+          var code = document.createElement('code');
+          code.textContent = slug;
+          badgeName.appendChild(code);
+        }
+      }
+      var badgeFallback = document.getElementById('tenantBadgeFallback');
+      if (badgeFallback) {
+        badgeFallback.style.background = color;
+        badgeFallback.textContent = (name && name.length) ? name.charAt(0) : '📚';
+      }
+      if (logoUrl) {
+        var badge = document.getElementById('tenantBadge');
+        if (badge && badgeFallback) {
+          var img = document.createElement('img');
+          img.className = 'tenant-badge-img';
+          img.src = logoUrl;
+          img.alt = name;
+          img.onerror = function() { this.remove(); badgeFallback.style.display = ''; };
+          badgeFallback.style.display = 'none';
+          badge.insertBefore(img, badgeFallback);
+        }
+      }
+      // 侧边栏
+      var sidebarText = document.getElementById('sidebarLogoText');
+      if (sidebarText) sidebarText.textContent = name;
+      var sidebarSub = document.getElementById('sidebarLogoSub');
+      if (sidebarSub) {
+        sidebarSub.textContent = tenant.is_platform_admin ? '👑 平台管理员' : ('租户 · ' + slug);
+      }
+      var sidebarFallback = document.querySelector('#sidebarLogo .sidebar-logo-fallback');
+      if (sidebarFallback && logoUrl) {
+        var sImg = document.createElement('img');
+        sImg.className = 'sidebar-logo-img';
+        sImg.src = logoUrl;
+        sImg.alt = name;
+        sImg.onerror = function() { this.remove(); sidebarFallback.style.display = ''; };
+        sidebarFallback.style.display = 'none';
+        sidebarFallback.parentNode.insertBefore(sImg, sidebarFallback);
+      }
+    }
 
     (async function() {
       try {

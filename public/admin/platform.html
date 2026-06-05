@@ -245,6 +245,9 @@
         <a href="/admin/audit.html" class="nav-item platform-only" data-page="audit" style="display:none">
           <span class="nav-icon">📋</span> 审计日志
         </a>
+        <a href="/admin/email-log.html" class="nav-item platform-only" data-page="email-log" style="display:none">
+          <span class="nav-icon">📧</span> 邮件日志
+        </a>
       </nav>
     </aside>
     <main class="main-content">
@@ -299,6 +302,13 @@
               <div class="tenant-stat-label">平台管理员</div>
             </div>
           </div>
+          <div class="tenant-stat">
+            <div class="tenant-stat-icon" style="background:#fef3c7">👥</div>
+            <div>
+              <div class="tenant-stat-num" id="statUsers">--</div>
+              <div class="tenant-stat-label">用户总数（跨租户）</div>
+            </div>
+          </div>
         </div>
 
         <!-- 操作栏 -->
@@ -324,6 +334,7 @@
                 <th style="text-align:center">启用</th>
                 <th style="text-align:center">页</th>
                 <th style="text-align:center">封面</th>
+                <th style="text-align:center">用户</th>
                 <th>创建时间</th>
                 <th>操作</th>
               </tr>
@@ -451,10 +462,12 @@
       const active = tenantsCache.filter(t => !t.suspended).length;
       const suspended = tenantsCache.filter(t => t.suspended).length;
       const admins = tenantsCache.filter(t => t.is_platform_admin).length;
+      const userTotal = tenantsCache.reduce((sum, t) => sum + ((t.usage && t.usage.user_count) || 0), 0);
       document.getElementById('statTotal').textContent = total;
       document.getElementById('statActive').textContent = active;
       document.getElementById('statSuspended').textContent = suspended;
       document.getElementById('statAdmins').textContent = admins;
+      document.getElementById('statUsers').textContent = userTotal;
 
       // 搜索过滤
       const list = !search ? tenantsCache : tenantsCache.filter(t => {
@@ -470,7 +483,7 @@
       empty.style.display = 'none';
 
       tbody.innerHTML = list.map(t => {
-        const usage = t.usage || { magazine_count: 0, enabled_magazine_count: 0, page_count: 0, cover_count: 0 };
+        const usage = t.usage || { magazine_count: 0, enabled_magazine_count: 0, page_count: 0, cover_count: 0, user_count: 0 };
         const isAdmin = !!t.is_platform_admin;
         const isSuspended = !!t.suspended;
         const roleChip = isAdmin
@@ -488,6 +501,8 @@
         const deleteBtn = isAdmin
           ? '<button class="btn btn-xs btn-secondary" disabled title="平台管理员不能删除">删除</button>'
           : '<button class="btn btn-xs btn-danger" data-act="delete" data-id="' + t.id + '" data-name="' + escapeAttr(t.name) + '" data-slug="' + escapeAttr(t.slug) + '">删除</button>';
+        // 查看用户（平台管理员跳到只读视图，tenant-users.html?tenantId=X）
+        const viewUsersBtn = '<a class="btn btn-xs btn-secondary" href="/admin/tenant-users.html?tenantId=' + t.id + '" title="查看该租户下的用户（只读）">👥 查看用户</a>';
         return `
           <tr>
             <td class="col-id">${t.id}</td>
@@ -499,9 +514,11 @@
             <td class="col-num">${usage.enabled_magazine_count}</td>
             <td class="col-num">${usage.page_count}</td>
             <td class="col-num">${usage.cover_count}</td>
+            <td class="col-num"><b style="color:var(--text)">${usage.user_count || 0}</b></td>
             <td class="col-time">${formatDateTime(t.created_at)}</td>
             <td class="col-actions">
               <button class="btn btn-xs btn-primary" data-act="edit" data-id="${t.id}">编辑</button>
+              ${viewUsersBtn}
               ${suspendBtn}
               ${deleteBtn}
             </td>

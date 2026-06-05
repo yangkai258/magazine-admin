@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>订阅与计费</title>
+  <link rel="stylesheet" href="/admin/css/style.css">
+  <script src="/admin/js/auth.js"></script>
+  <style>
+    /* ===== 紫色 hero 卡（跟 platform.html 风格一致） ===== */
+    .billing-hero {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 22px 26px;
+      margin-bottom: 20px;
+      box-shadow: 0 6px 20px rgba(124, 58, 237, 0.18);
+      position: relative;
+      overflow: hidden;
+    }
+    .billing-hero::before {
+      content: "";
+      position: absolute;
+      top: -40px; right: -40px;
+      width: 180px; height: 180px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 50%;
+    }
+    .billing-hero::after {
+      content: "";
+      position: absolute;
+      bottom: -60px; right: 60px;
+      width: 120px; height: 120px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 50%;
+    }
+    .billing-hero h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: relative; z-index: 1;
+    }
+    .billing-hero p {
+      font-size: 13px;
+      line-height: 1.7;
+      opacity: 0.95;
+      position: relative; z-index: 1;
+      max-width: 800px;
+    }
+    .billing-hero .hero-badges {
+      display: inline-flex;
+      gap: 6px;
+      margin-top: 10px;
+      position: relative; z-index: 1;
+    }
+    .billing-hero .hero-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .billing-hero code {
+      background: rgba(255,255,255,0.2);
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+
+    /* ===== 当前订阅卡 ===== */
+    .current-sub {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px 26px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: center;
+    }
+    .current-sub-info { display: flex; flex-direction: column; gap: 6px; }
+    .current-sub-name {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .current-sub-name .price {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .current-sub-meta {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .current-sub-meta .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .current-sub-meta .meta-item strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .current-sub-features {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .current-sub-features .feat {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .current-sub-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .plan-chip-current {
+      display: inline-block;
+      padding: 3px 10px;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: #fff;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .plan-chip-trial {
+      display: inline-block;
+      padding: 3px 10px;
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .plan-chip-expired {
+      display: inline-block;
+      padding: 3px 10px;
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* ===== 套餐对比区 ===== */
+    .plans-section-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 28px 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .plans-section-title::before {
+      content: "";
+      display: inline-block;
+      width: 3px;
+      height: 16px;
+      background: linear-gradient(180deg, #4f46e5, #7c3aed);
+      border-radius: 2px;
+    }
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+    .plan-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      padding: 24px 22px;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.2s, box-shadow 0.2s;
+      position: relative;
+    }
+    .plan-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+    .plan-card.is-current {
+      border-color: #4f46e5;
+      border-width: 2px;
+      box-shadow: 0 8px 24px rgba(79, 70, 229, 0.15);
+    }
+    .plan-card.is-current::before {
+      content: "当前套餐";
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 12px;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
+    .plan-card-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .plan-card-price {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+    .plan-card-price .amount {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .plan-card-price .currency { font-size: 13px; color: var(--text-secondary); }
+    .plan-card-price .period { font-size: 12px; color: var(--text-secondary); }
+    .plan-card-sublabel {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      min-height: 18px;
+    }
+    .plan-card-features {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 20px;
+      flex: 1;
+    }
+    .plan-card-features li {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 6px 0;
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .plan-card-features li::before {
+      content: "✓";
+      color: #22c55e;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .plan-card-features li.muted::before { content: "✕"; color: #d1d5db; }
+    .plan-card-features li.muted { color: var(--text-secondary); }
+    .plan-card-action { width: 100%; }
+    .plan-card-action .btn {
+      width: 100%;
+      justify-content: center;
+    }
+    .plan-card.is-current .plan-card-action .btn-current {
+      background: #f3f4f6;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      cursor: not-allowed;
+    }
+
+    /* ===== 支付方式 modal ===== */
+    .pay-method-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 6px;
+    }
+    .pay-method-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 20px 12px;
+      background: #fff;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      transition: all 0.2s;
+    }
+    .pay-method-btn:hover { border-color: var(--primary); background: #f5f3ff; }
+    .pay-method-btn.alipay:hover { border-color: #1677ff; background: #e6f4ff; }
+    .pay-method-btn.wechat:hover { border-color: #07c160; background: #e6fbf2; }
+    .pay-method-btn .pay-icon { font-size: 32px; }
+    .pay-method-btn .pay-label { font-size: 14px; font-weight: 600; }
+    .pay-method-btn .pay-hint { font-size: 11px; color: var(--text-secondary); font-weight: 400; }
+
+    /* ===== 账单历史 ===== */
+    .invoices-table {
+      font-size: 13px;
+    }
+    .invoices-table th, .invoices-table td { padding: 12px 16px; }
+    .invoices-table td.col-amount {
+      font-weight: 600;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .invoices-table td.col-time {
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      white-space: nowrap;
+    }
+    .invoices-table td.col-method {
+      color: var(--text-secondary);
+    }
+    .invoices-table .col-id { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .invoice-status {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .invoice-status.paid { background: #dcfce7; color: #166534; }
+    .invoice-status.pending { background: #fef3c7; color: #92400e; }
+    .invoice-status.failed { background: #fee2e2; color: #991b1b; }
+    .invoice-method {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 12px;
+    }
+    .invoice-method .mi { font-size: 13px; }
+
+    /* ===== 工具区 ===== */
+    .billing-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .billing-toolbar .left { font-size: 13px; color: var(--text-secondary); }
+
+    /* ===== 提示卡（成功后） ===== */
+    .pay-hint-card {
+      background: linear-gradient(135deg, #eef2ff, #f5f3ff);
+      border: 1px solid #c7d2fe;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #4338ca;
+      line-height: 1.6;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <script>MAG_AUTH.requireAuth();</script>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav">
+        <a href="/admin/" class="nav-item" data-page="dashboard">
+          <span class="nav-icon">📊</span> 总览
+        </a>
+        <a href="/admin/magazine/list.html" class="nav-item" data-page="magazine">
+          <span class="nav-icon">📖</span> 杂志管理
+        </a>
+        <a href="/admin/cover/list.html" class="nav-item" data-page="cover">
+          <span class="nav-icon">🖼</span> 封面管理
+        </a>
+        <a href="/admin/billing.html" class="nav-item owner-only active" data-page="billing" style="display:none">
+          <span class="nav-icon">💳</span> 订阅与计费
+        </a>
+        <a href="/admin/platform.html" class="nav-item platform-only" data-page="platform" style="display:none">
+          <span class="nav-icon">🏢</span> 平台管理
+        </a>
+        <a href="/admin/audit.html" class="nav-item platform-only" data-page="audit" style="display:none">
+          <span class="nav-icon">📋</span> 审计日志
+        </a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar">
+        <h1 class="page-title">订阅与计费</h1>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button>
+      </header>
+      <div class="content-area" id="contentArea">
+
+        <!-- 顶部紫色 hero 卡 -->
+        <div class="billing-hero">
+          <h2>💳 订阅与计费 · 仅 owner 可见</h2>
+          <p>
+            在此查看当前租户订阅的套餐、对比升级 / 降级方案，并完成支付宝、微信支付。
+            支付端点由 <code>requireRole('owner')</code> 保护，普通成员访问会看到
+            <strong>🔒 无权访问</strong> 提示并被引导回总览。
+            真实接入了支付宝 / 微信商户后自动启用；未配置时进入 <strong>mock 模式</strong>，可走通「下单 → 模拟支付 → 自动激活」全链路。
+          </p>
+          <div class="hero-badges">
+            <span class="hero-badge">requireRole(owner)</span>
+            <span class="hero-badge">/api/admin/payment/create</span>
+            <span class="hero-badge">mock 模式可走通</span>
+          </div>
+        </div>
+
+        <!-- 1. 当前订阅 -->
+        <div class="current-sub" id="currentSub">
+          <div class="current-sub-info">
+            <div class="current-sub-name">
+              <span id="curPlanName">--</span>
+              <span class="price" id="curPlanPrice">--</span>
+              <span class="plan-chip-current" id="curPlanChip" style="display:none">当前</span>
+              <span class="plan-chip-trial" id="curTrialChip" style="display:none">试用中</span>
+              <span class="plan-chip-expired" id="curExpiredChip" style="display:none">已过期</span>
+            </div>
+            <div class="current-sub-meta" id="curPlanMeta">
+              <span class="meta-item">订阅到期：<strong id="curEndsAt">--</strong></span>
+              <span class="meta-item">状态：<strong id="curStatus">--</strong></span>
+            </div>
+            <div class="current-sub-features" id="curPlanFeatures"></div>
+          </div>
+          <div class="current-sub-actions">
+            <button class="btn btn-primary" id="switchPlanBtn" type="button">🔀 切换套餐</button>
+          </div>
+        </div>
+
+        <!-- 2. 套餐对比 -->
+        <h3 class="plans-section-title">套餐对比</h3>
+        <div class="plans-grid" id="plansGrid"></div>
+
+        <!-- 3. 支付方式 modal -->
+        <div class="modal-overlay hidden" id="payModal">
+          <div class="modal" style="max-width:440px">
+            <div class="modal-header">
+              <h3 id="payModalTitle">选择支付方式</h3>
+              <button class="modal-close" id="closePayModal" type="button" aria-label="关闭">×</button>
+            </div>
+            <div class="modal-body">
+              <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:6px">
+                即将订阅：<strong id="payPlanName" style="color:var(--text)">--</strong>
+                <span style="margin-left:6px">· 金额：<strong id="payAmount" style="color:var(--text)">--</strong></strong></span>
+              </div>
+              <div class="pay-method-row">
+                <button class="pay-method-btn alipay" id="payAlipayBtn" type="button">
+                  <span class="pay-icon">💙</span>
+                  <span class="pay-label">支付宝</span>
+                  <span class="pay-hint">电脑网站支付</span>
+                </button>
+                <button class="pay-method-btn wechat" id="payWechatBtn" type="button">
+                  <span class="pay-icon">💚</span>
+                  <span class="pay-label">微信支付</span>
+                  <span class="pay-hint">扫码 / 公众号</span>
+                </button>
+              </div>
+              <div class="pay-hint-card" id="payHintCard" style="display:none"></div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" id="cancelPayModal" type="button">取消</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. 账单历史 -->
+        <h3 class="plans-section-title" style="margin-top:32px">账单历史</h3>
+        <div class="billing-toolbar">
+          <div class="left" id="invoiceCount">-- 共 0 笔账单</div>
+          <button class="btn btn-secondary btn-sm" id="refreshInvoicesBtn" type="button">↻ 刷新</button>
+        </div>
+        <div class="table-wrap">
+          <table class="invoices-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>金额</th>
+                <th>周期</th>
+                <th>状态</th>
+                <th>支付方式</th>
+                <th>创建时间</th>
+                <th>支付时间</th>
+              </tr>
+            </thead>
+            <tbody id="invoicesTbody"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="invoicesEmpty" style="display:none">
+          <div class="empty-icon">🧾</div>
+          <p>还没有账单</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/admin/js/api.js"></script>
+  <script>
+    // ===== owner 角色才显示「订阅与计费」菜单；platform_admin 也算（通常超集）=====
+    MAG_AUTH.getUser().then(function(u) {
+      if (!u) return;
+      if (u.role === 'owner') {
+        document.querySelectorAll('.owner-only').forEach(function(el) { el.style.display = ''; });
+      }
+    });
+    MAG_AUTH.getTenant().then(function(t) {
+      if (t && t.is_platform_admin) {
+        document.querySelectorAll('.platform-only').forEach(function(el) { el.style.display = ''; });
+      }
+    });
+
+    // ===== 工具 =====
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+    function formatDateTime(str) {
+      if (!str) return '-';
+      var s = String(str).replace('T', ' ');
+      return s.slice(0, 16);
+    }
+    // 把 features 对象翻译成人话
+    function describeFeature(key, val) {
+      switch (key) {
+        case 'max_magazines': return val < 0 ? '杂志数：不限制' : '最多 ' + val + ' 本杂志';
+        case 'max_pages_per_magazine': return val < 0 ? '单本页数：不限制' : '单本最多 ' + val + ' 页';
+        case 'max_storage_mb': return '存储 ' + (val >= 1024 ? (val/1024).toFixed(1) + ' GB' : val + ' MB');
+        case 'has_custom_branding': return val ? '可定制品牌' : '不可定制品牌';
+        case 'has_analytics': return val ? '阅读数据分析' : '无阅读数据分析';
+        case 'max_users': return val < 0 ? '团队成员：不限制' : '最多 ' + val + ' 个团队成员';
+        default: return key + ': ' + val;
+      }
+    }
+    function describeFeatureBullet(key, val) {
+      // 给套餐卡的 bullets 用：尽量简短
+      switch (key) {
+        case 'max_magazines': return val < 0 ? '杂志数：不限制' : '杂志数：最多 ' + val + ' 本';
+        case 'max_pages_per_magazine': return val < 0 ? '单本页数：不限制' : '单本最多 ' + val + ' 页';
+        case 'max_storage_mb': return '存储 ' + (val >= 1024 ? (val/1024).toFixed(1) + ' GB' : val + ' MB');
+        case 'has_custom_branding': return val ? '✓ 自定义品牌（Logo / 主色）' : '✕ 不可定制品牌';
+        case 'has_analytics': return val ? '✓ 阅读数据分析看板' : '✕ 无阅读数据分析';
+        case 'max_users': return val < 0 ? '团队人数：不限制' : '团队最多 ' + val + ' 人';
+        default: return key + ': ' + val;
+      }
+    }
+    // 计算 trial / 订阅状态
+    function computeSubStatus(sub, plan, trialEndsAt) {
+      if (!plan) return { label: '未订阅', kind: 'none' };
+      // 有 subscription 记录 + 仍在期内
+      if (sub && sub.ends_at) {
+        const ends = new Date(sub.ends_at).getTime();
+        if (ends >= Date.now()) return { label: '订阅中', kind: 'active', endsAt: sub.ends_at };
+        return { label: '已过期', kind: 'expired', endsAt: sub.ends_at };
+      }
+      // 无 subscription 但有 trial
+      if (trialEndsAt) {
+        const ends = new Date(trialEndsAt).getTime();
+        if (ends >= Date.now()) return { label: '试用中', kind: 'trial', endsAt: trialEndsAt };
+        return { label: '试用已结束', kind: 'expired', endsAt: trialEndsAt };
+      }
+      // 兜底：free 计划
+      if (plan.price_monthly_cny === 0) return { label: '免费版', kind: 'free' };
+      return { label: '待激活', kind: 'pending' };
+    }
+
+    // ===== 全局缓存 =====
+    var plansCache = [];
+    var subscriptionCache = null;  // {plan, subscription, trial_ends_at}
+    var currentPlanId = null;
+    var pendingPlanId = null;       // 选中的待支付 plan
+
+    // ===== 渲染：当前订阅 =====
+    function renderCurrentSub() {
+      const data = subscriptionCache || {};
+      const plan = data.plan || null;
+      const sub = data.subscription || null;
+      const trial = data.trial_ends_at || null;
+      const status = computeSubStatus(sub, plan, trial);
+
+      // 名称
+      document.getElementById('curPlanName').textContent = plan ? plan.name : '未订阅';
+      document.getElementById('curPlanPrice').textContent = plan
+        ? '· ¥' + plan.price_monthly_cny + ' / 月'
+        : '';
+      // 状态 chip
+      document.getElementById('curPlanChip').style.display = 'none';
+      document.getElementById('curTrialChip').style.display = 'none';
+      document.getElementById('curExpiredChip').style.display = 'none';
+      if (status.kind === 'active' || status.kind === 'free') {
+        document.getElementById('curPlanChip').style.display = '';
+      } else if (status.kind === 'trial') {
+        document.getElementById('curTrialChip').style.display = '';
+      } else if (status.kind === 'expired') {
+        document.getElementById('curExpiredChip').style.display = '';
+      }
+      // meta
+      document.getElementById('curEndsAt').textContent = status.endsAt ? formatDateTime(status.endsAt) : (plan && plan.price_monthly_cny === 0 ? '永久' : '--');
+      document.getElementById('curStatus').textContent = status.label;
+
+      // features
+      const featBox = document.getElementById('curPlanFeatures');
+      if (plan && plan.features) {
+        const keys = ['max_magazines', 'max_users', 'max_storage_mb', 'has_custom_branding', 'has_analytics'];
+        featBox.innerHTML = keys
+          .filter(k => plan.features[k] !== undefined)
+          .map(k => '<span class="feat">· ' + escapeHtml(describeFeature(k, plan.features[k])) + '</span>')
+          .join('');
+      } else {
+        featBox.innerHTML = '';
+      }
+    }
+
+    // ===== 渲染：套餐对比 =====
+    function renderPlans() {
+      const data = subscriptionCache || {};
+      currentPlanId = data.plan ? data.plan.id : null;
+      const grid = document.getElementById('plansGrid');
+      if (!plansCache.length) {
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-secondary)">暂无可选套餐</div>';
+        return;
+      }
+      grid.innerHTML = plansCache.map(function(p) {
+        const isCurrent = (p.id === currentPlanId);
+        const features = p.features || {};
+        const featureKeys = ['max_magazines', 'max_users', 'max_pages_per_magazine', 'max_storage_mb', 'has_custom_branding', 'has_analytics'];
+        const bullets = featureKeys
+          .filter(k => features[k] !== undefined)
+          .map(function(k) {
+            const txt = describeFeatureBullet(k, features[k]);
+            const muted = (typeof features[k] === 'boolean' && !features[k]);
+            return '<li class="' + (muted ? 'muted' : '') + '">' + escapeHtml(txt.replace(/^[✓✕]\s*/, '')) + '</li>';
+          })
+          .join('');
+        const priceLabel = p.price_monthly_cny === 0 ? '免费' : '¥' + p.price_monthly_cny;
+        const subLabel = p.price_monthly_cny === 0 ? '永久免费' : '按月计费，可随时取消';
+        const actionBtn = isCurrent
+          ? '<button class="btn btn-current" type="button" disabled>✓ 当前套餐</button>'
+          : (p.price_monthly_cny === 0
+              ? '<button class="btn btn-secondary" data-act="downgrade" data-plan-id="' + p.id + '" type="button">降级到「' + escapeHtml(p.name) + '」</button>'
+              : (currentPlanId && p.price_monthly_cny < plansCache.find(x => x.id === currentPlanId).price_monthly_cny
+                  ? '<button class="btn btn-secondary" data-act="downgrade" data-plan-id="' + p.id + '" type="button">降级到「' + escapeHtml(p.name) + '」</button>'
+                  : '<button class="btn btn-primary" data-act="upgrade" data-plan-id="' + p.id + '" type="button">升级到「' + escapeHtml(p.name) + '」</button>'));
+        return ''
+          + '<div class="plan-card' + (isCurrent ? ' is-current' : '') + '" data-plan-id="' + p.id + '">'
+          +   '<div class="plan-card-name">' + escapeHtml(p.name) + '</div>'
+          +   '<div class="plan-card-price">'
+          +     '<span class="amount">' + priceLabel + '</span>'
+          +     (p.price_monthly_cny > 0 ? '<span class="currency"> CNY</span><span class="period"> / 月</span>' : '')
+          +   '</div>'
+          +   '<div class="plan-card-sublabel">' + subLabel + '</div>'
+          +   '<ul class="plan-card-features">' + bullets + '</ul>'
+          +   '<div class="plan-card-action">' + actionBtn + '</div>'
+          + '</div>';
+      }).join('');
+      // 事件委托
+      grid.querySelectorAll('button[data-act]').forEach(function(btn) {
+        btn.addEventListener('click', function(ev) {
+          const act = btn.getAttribute('data-act');
+          const planId = Number(btn.getAttribute('data-plan-id'));
+          openPayModal(planId);
+        });
+      });
+    }
+
+    // ===== 渲染：账单历史 =====
+    function renderInvoices(invoices) {
+      const tbody = document.getElementById('invoicesTbody');
+      const empty = document.getElementById('invoicesEmpty');
+      const count = document.getElementById('invoiceCount');
+      if (!invoices || invoices.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        count.textContent = '共 0 笔账单';
+        return;
+      }
+      empty.style.display = 'none';
+      count.textContent = '共 ' + invoices.length + ' 笔账单';
+      tbody.innerHTML = invoices.map(function(inv) {
+        const status = inv.status || 'pending';
+        const statusLabel = status === 'paid' ? '已支付' : status === 'pending' ? '待支付' : status === 'failed' ? '失败' : status;
+        const statusClass = status === 'paid' ? 'paid' : status === 'pending' ? 'pending' : 'failed';
+        const method = inv.payment_method || '-';
+        const methodLabel = method === 'alipay' ? '<span class="invoice-method"><span class="mi">💙</span> 支付宝</span>'
+                          : method === 'wechat' ? '<span class="invoice-method"><span class="mi">💚</span> 微信</span>'
+                          : '<span class="invoice-method">' + escapeHtml(method) + '</span>';
+        const period = (inv.period_start || inv.period_end)
+          ? escapeHtml(formatDateTime(inv.period_start) + ' ~ ' + formatDateTime(inv.period_end))
+          : '<span style="color:var(--text-secondary)">-</span>';
+        return ''
+          + '<tr>'
+          +   '<td class="col-id">#' + inv.id + '</td>'
+          +   '<td class="col-amount">¥' + (inv.amount_cny || 0) + '</td>'
+          +   '<td>' + period + '</td>'
+          +   '<td><span class="invoice-status ' + statusClass + '">' + statusLabel + '</span></td>'
+          +   '<td class="col-method">' + methodLabel + '</td>'
+          +   '<td class="col-time">' + formatDateTime(inv.created_at) + '</td>'
+          +   '<td class="col-time">' + formatDateTime(inv.paid_at) + '</td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    // ===== 加载：套餐 =====
+    async function loadPlans() {
+      plansCache = await api.get('/admin/plans');
+    }
+
+    // ===== 加载：当前订阅 =====
+    async function loadSubscription() {
+      subscriptionCache = await api.get('/admin/subscription');
+    }
+
+    // ===== 加载：账单 =====
+    async function loadInvoices() {
+      const invoices = await api.get('/admin/invoices');
+      renderInvoices(invoices);
+    }
+
+    // ===== 主加载流程（双层防护：owner 预检 + 接口错误兜底）=====
+    async function loadAll() {
+      // 预检：必须是 owner
+      const user = await MAG_AUTH.getUser();
+      if (!user) return;
+      if (user.role !== 'owner') {
+        renderNoAccess(user);
+        return;
+      }
+      try {
+        await Promise.all([loadSubscription(), loadPlans(), loadInvoices()]);
+        renderCurrentSub();
+        renderPlans();
+      } catch (e) {
+        const msg = e && e.message ? e.message : '网络错误';
+        const is403 = /403|owner|权限/i.test(msg);
+        if (is403) renderNoAccess(user);
+        else toast('加载失败：' + msg, 'error');
+      }
+    }
+
+    function renderNoAccess(user) {
+      const area = document.getElementById('contentArea');
+      area.innerHTML = ''
+        + '<div style="max-width:520px;margin:60px auto;padding:32px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);text-align:center">'
+        +   '<div style="font-size:48px;margin-bottom:12px">🔒</div>'
+        +   '<h2 style="font-size:18px;font-weight:600;margin-bottom:8px;color:var(--text)">无权访问</h2>'
+        +   '<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:20px">'
+        +     '此页面仅<strong>租户 owner</strong>可见。您的当前账号 <code style="background:#f3f4f6;padding:1px 6px;border-radius:3px">' + escapeHtml(user.email || user.name || '?') + '</code> 角色是 <code style="background:#f3f4f6;padding:1px 6px;border-radius:3px">' + escapeHtml(user.role || '?') + '</code>，没有计费管理权限。'
+        +   '</p>'
+        +   '<a href="/admin/" class="btn btn-primary">← 返回总览</a>'
+        + '</div>';
+    }
+
+    // ===== 支付方式 modal =====
+    function openPayModal(planId) {
+      const plan = plansCache.find(p => p.id === planId);
+      if (!plan) { toast('套餐不存在', 'error'); return; }
+      if (plan.id === currentPlanId) { toast('这已经是当前套餐了', 'info'); return; }
+      pendingPlanId = planId;
+      document.getElementById('payPlanName').textContent = plan.name;
+      document.getElementById('payAmount').textContent = '¥' + plan.price_monthly_cny;
+      document.getElementById('payHintCard').style.display = 'none';
+      document.getElementById('payAlipayBtn').disabled = false;
+      document.getElementById('payWechatBtn').disabled = false;
+      document.getElementById('payModal').classList.remove('hidden');
+    }
+    function closePayModal() {
+      document.getElementById('payModal').classList.add('hidden');
+      pendingPlanId = null;
+    }
+    async function startPay(method) {
+      if (!pendingPlanId) return;
+      const plan = plansCache.find(p => p.id === pendingPlanId);
+      if (!plan) return;
+      const btn = method === 'alipay' ? document.getElementById('payAlipayBtn') : document.getElementById('payWechatBtn');
+      const otherBtn = method === 'alipay' ? document.getElementById('payWechatBtn') : document.getElementById('payAlipayBtn');
+      btn.disabled = true;
+      otherBtn.disabled = true;
+      try {
+        const order = await api.post('/admin/payment/create', { plan_id: pendingPlanId, method: method });
+        // 关 modal
+        closePayModal();
+        // 打开支付窗口
+        if (order.pay_url) {
+          // mock 模式：/admin/payment-mock?invoice=X&method=Y
+          // 真实模式：pay_url 可能是外链（支付宝/微信网关）
+          const win = window.open(order.pay_url, '_blank');
+          // 提示
+          toast('请在新窗口完成支付；支付成功后会自动激活套餐，无需手动操作', 'success');
+        } else {
+          toast('支付订单已创建（pay_url 缺失）', 'error');
+        }
+        // 立即刷新账单（会出现一条 pending 记录）
+        await loadInvoices();
+      } catch (e) {
+        const msg = e && e.message ? e.message : '创建支付订单失败';
+        toast(msg, 'error');
+        // 显示在 modal 内的提示卡
+        const hint = document.getElementById('payHintCard');
+        hint.style.display = 'block';
+        hint.innerHTML = '⚠️ ' + escapeHtml(msg);
+        btn.disabled = false;
+        otherBtn.disabled = false;
+      }
+    }
+
+    // ===== 事件绑定 =====
+    document.getElementById('switchPlanBtn').addEventListener('click', function() {
+      const grid = document.getElementById('plansGrid');
+      if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    document.getElementById('closePayModal').addEventListener('click', closePayModal);
+    document.getElementById('cancelPayModal').addEventListener('click', closePayModal);
+    document.getElementById('payAlipayBtn').addEventListener('click', function() { startPay('alipay'); });
+    document.getElementById('payWechatBtn').addEventListener('click', function() { startPay('wechat'); });
+    document.getElementById('refreshInvoicesBtn').addEventListener('click', function() { loadInvoices().catch(e => toast(e.message || '刷新失败', 'error')); });
+    document.getElementById('payModal').addEventListener('click', function(e) {
+      if (e.target === e.currentTarget) closePayModal();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && !document.getElementById('payModal').classList.contains('hidden')) {
+        closePayModal();
+      }
+    });
+
+    // 初次加载
+    loadAll();
+  </script>
+</body>
+</html>

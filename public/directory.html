@@ -7,6 +7,10 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { min-height: 100%; background: #fff; font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif; color: #222; }
+    /* ====== 品牌主色（默认 #4f46e5；JS 启动后用 tenant.primary_color 覆盖）====== */
+    :root {
+      --primary: #4f46e5;
+    }
 
     .header {
       padding: 36px 24px 28px;
@@ -18,11 +22,27 @@
       object-fit: contain;
       margin-bottom: 14px;
     }
+    .header-logo-fallback {
+      width: 56px; height: 56px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      margin-bottom: 14px;
+    }
     .header-title {
       font-size: 22px;
       font-weight: 600;
       letter-spacing: 4px;
       color: #222;
+      transition: color 0.3s;
+    }
+    .header-title.branded { color: var(--primary); }
+    .header-accent {
+      width: 40px; height: 2px;
+      background: var(--primary);
+      margin: 10px auto 0;
+      border-radius: 1px;
     }
     .book-list {
       padding: 24px 20px;
@@ -42,12 +62,28 @@
       color: #222;
       border: 1px solid #f2f2f2;
       box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+      position: relative;
+      overflow: hidden;
+    }
+    /* 卡片左侧主色 accent 条 */
+    .book-item::before {
+      content: "";
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--primary);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.25s;
     }
     .book-item:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 24px rgba(0,0,0,0.08);
-      border-color: #e0e0e0;
+      box-shadow: 0 6px 24px rgba(79, 70, 229, 0.18);
+      border-color: var(--primary);
     }
+    .book-item:hover::before { transform: scaleX(1); }
+    .book-item:hover .book-arrow { fill: var(--primary); transform: translateX(3px); }
+    .book-item:hover .book-thumb { border-color: var(--primary); }
     .book-thumb {
       width: 88px; height: 64px;
       object-fit: cover;
@@ -55,10 +91,12 @@
       background: #f5f5f5;
       flex-shrink: 0;
       border: 1px solid #f0f0f0;
+      transition: border-color 0.25s;
     }
     .book-info {
       margin-left: 16px;
       flex: 1;
+      min-width: 0;
     }
     .book-name {
       font-size: 15px;
@@ -74,6 +112,7 @@
       width: 18px; height: 18px;
       fill: #ccc;
       flex-shrink: 0;
+      transition: fill 0.25s, transform 0.25s;
     }
 
     .footer-note {
@@ -82,10 +121,18 @@
       font-size: 12px;
       color: #ccc;
     }
+    .footer-note .footer-dot {
+      display: inline-block;
+      width: 4px; height: 4px;
+      background: var(--primary);
+      border-radius: 50%;
+      vertical-align: middle;
+      margin: 0 6px;
+    }
 
     @media (max-width: 480px) {
       .header { padding: 28px 20px 22px; }
-      .header-logo { width: 48px; height: 48px; }
+      .header-logo, .header-logo-fallback { width: 48px; height: 48px; }
       .header-title { font-size: 19px; }
       .book-item { padding: 14px 12px; }
       .book-thumb { width: 72px; height: 54px; }
@@ -96,17 +143,20 @@
 </head>
 <body>
 <div class="header">
-  <img class="header-logo" src="images/logo.png" alt="logo">
+  <img class="header-logo" id="headerLogo" src="images/logo.png" alt="logo" onerror="this.style.display='none';var f=document.getElementById('headerLogoFallback');if(f)f.style.display='inline-flex';">
+  <div class="header-logo-fallback" id="headerLogoFallback" style="display:none">📚</div>
   <div class="header-title" id="headerTitle">电子刊</div>
+  <div class="header-accent"></div>
 </div>
 
 <div class="book-list" id="bookList">
   <div class="loading" id="loading">加载中...</div>
 </div>
 
-<div class="footer-note">支持手机 / 平板 / 电脑阅读</div>
+<div class="footer-note"><span class="footer-dot"></span>支持手机 / 平板 / 电脑阅读</div>
 
 <script src="config.js"></script>
+<script src="reader/track.js"></script>
 <script>
 (function() {
   // ====== 多租户：解析当前 tenant slug ======
@@ -124,6 +174,27 @@
     return null;
   }
 
+  // ====== 应用租户品牌（主色 + logo）======
+  function applyBranding(tenant) {
+    if (!tenant) return;
+    // 主色
+    var color = tenant.primary_color || (window.MAG_CONFIG && window.MAG_CONFIG.PRIMARY_COLOR) || '#4f46e5';
+    document.documentElement.style.setProperty('--primary', color);
+    // 标题：应用主色
+    var title = document.getElementById('headerTitle');
+    if (title) title.classList.add('branded');
+    // Logo：替换 src（fallback 已通过 onerror 处理）
+    if (tenant.logo_url) {
+      var logo = document.getElementById('headerLogo');
+      if (logo) {
+        logo.src = tenant.logo_url;
+        logo.style.display = '';
+        var fb = document.getElementById('headerLogoFallback');
+        if (fb) fb.style.display = 'none';
+      }
+    }
+  }
+
   async function load() {
     var list = document.getElementById('bookList');
     // SaaS 默认：同源 /api/public/data；可由 MAG_CONFIG.DATA_URL 覆盖
@@ -136,6 +207,9 @@
       });
       var tenant = findTenant(data, tenantSlug);
       if (!tenant) throw new Error('tenant "' + tenantSlug + '" 不存在');
+
+      // 应用品牌
+      applyBranding(tenant);
 
       // 标题用租户名
       document.title = tenant.name ? (tenant.name + ' - 目录') : '目录';
@@ -156,10 +230,20 @@
         item.className = 'book-item';
         // 把 tenant slug 传下去
         item.href = 'reader/viewer.html?id=' + m.id + '&t=' + encodeURIComponent(tenantSlug);
+        // 埋点：点击杂志卡 → view（用 sendBeacon，导航期间也能发）
+        item.addEventListener('click', function() {
+          try {
+            window.MAG_TRACK.trackEvent({
+              tenant_slug: tenantSlug,
+              event_type: 'view',
+              magazine_id: Number(m.id)
+            });
+          } catch (e) { /* ignore */ }
+        });
         item.innerHTML =
           '<img class="book-thumb" src="' + cover + '" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%2788%27 height=%2764%27 fill=%27%23f5f5f5%27><rect width=%2788%27 height=%2764%27/><text x=%2750%25%27 y=%2750%25%27 text-anchor=%27middle%27 dy=%27.3em%27 font-size=%2720%27>📖</text></svg>\'">' +
           '<div class="book-info">' +
-          '<div class="book-name">' + m.name + '</div>' +
+          '<div class="book-name">' + escapeHtml(m.name) + '</div>' +
           '<div class="book-desc">点击阅读</div>' +
           '</div>' +
           '<svg class="book-arrow" viewBox="0 0 24 24"><path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>';
@@ -170,6 +254,18 @@
       list.innerHTML = '<div style="text-align:center;padding:40px;color:#e53935">加载失败，请检查网络或数据源</div>';
     }
   }
+
+  // HTML 转义（防御 m.name 注入）
+  function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   load();
 })();
 </script>

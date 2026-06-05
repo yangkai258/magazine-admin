@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>邮件发送日志</title>
+  <link rel="stylesheet" href="/admin/css/style.css">
+  <script src="/admin/js/auth.js"></script>
+  <style>
+    /* 顶部说明卡片 */
+    .email-notice {
+      background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+      border: 1px solid #c7d2fe;
+      border-left: 4px solid #6366f1;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13px;
+      color: #3730a3;
+      line-height: 1.6;
+    }
+    .email-notice-icon { font-size: 22px; flex-shrink: 0; }
+    .email-notice-title { font-weight: 600; margin-bottom: 2px; color: #312e81; }
+    .email-notice-body { font-size: 12px; color: #4338ca; }
+
+    /* 筛选栏 */
+    .filter-bar {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+      margin-bottom: 16px;
+    }
+    .filter-bar .form-group { min-width: 180px; }
+    .filter-bar .form-group label { font-size: 12px; }
+    .filter-bar input, .filter-bar select {
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+      background: #fff;
+      min-width: 180px;
+    }
+    .filter-bar input:focus, .filter-bar select:focus { border-color: var(--primary); }
+    .filter-bar .filter-actions {
+      display: flex;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    /* 表格 */
+    .email-table { font-size: 12px; }
+    .email-table th, .email-table td { padding: 10px 12px; }
+    .email-table td.mono {
+      font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .email-table .col-time   { white-space: nowrap; min-width: 150px; }
+    .email-table .col-to     { min-width: 200px; }
+    .email-table .col-subject{ min-width: 200px; }
+    .email-table .col-error  { min-width: 180px; max-width: 320px; word-break: break-all; }
+
+    /* 状态 chip */
+    .status-chip {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .status-chip.sent    { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .status-chip.pending { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .status-chip.failed  { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+    /* 分页 */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .pagination .page-info b { color: var(--text); }
+    .pagination .page-buttons { display: flex; gap: 8px; }
+    .pagination .page-buttons .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* 加载中 */
+    .email-loading {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+    .email-loading .spin {
+      display: inline-block;
+      width: 28px; height: 28px;
+      border: 3px solid #e5e7eb;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 403 拦截 */
+    .forbidden-card {
+      max-width: 520px;
+      margin: 60px auto;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .forbidden-card .icon { font-size: 56px; margin-bottom: 8px; }
+    .forbidden-card h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+    .forbidden-card p { color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+
+    @media (max-width: 768px) {
+      .filter-bar .filter-actions { margin-left: 0; width: 100%; }
+      .email-table .col-subject { min-width: 140px; }
+    }
+  </style>
+</head>
+<body>
+  <script>MAG_AUTH.requireAuth();</script>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav">
+        <a href="/admin/" class="nav-item" data-page="dashboard">
+          <span class="nav-icon">📊</span> 总览
+        </a>
+        <a href="/admin/magazine/list.html" class="nav-item" data-page="magazine">
+          <span class="nav-icon">📖</span> 杂志管理
+        </a>
+        <a href="/admin/cover/list.html" class="nav-item" data-page="cover">
+          <span class="nav-icon">🖼</span> 封面管理
+        </a>
+        <a href="/admin/tenant-users.html" class="nav-item owner-only" data-page="tenant-users" style="display:none">
+          <span class="nav-icon">👥</span> 用户管理
+        </a>
+        <a href="/admin/platform.html" class="nav-item platform-only" data-page="platform" style="display:none">
+          <span class="nav-icon">🏢</span> 平台管理
+        </a>
+        <a href="/admin/audit.html" class="nav-item platform-only" data-page="audit" style="display:none">
+          <span class="nav-icon">📋</span> 审计日志
+        </a>
+        <a href="/admin/email-log.html" class="nav-item platform-only active" data-page="email-log" style="display:none">
+          <span class="nav-icon">📧</span> 邮件日志
+        </a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar">
+        <h1 class="page-title">邮件发送日志</h1>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button>
+      </header>
+      <div class="content-area" id="contentArea">
+        <!-- 加载中占位：JS 接管后会替换 -->
+        <div class="email-loading"><div class="spin"></div><div>加载中...</div></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/admin/js/api.js"></script>
+  <script>
+    // ========== 状态 ==========
+    const state = {
+      toEmail: '',   // 收件人过滤
+      status: '',    // '' | sent | pending | failed
+      limit: 100,
+      offset: 0,
+      total: 0,
+      items: [],
+      loading: false,
+      isPlatformAdmin: false
+    };
+
+    // ========== 工具 ==========
+    function escapeHtml(s) {
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function formatTimestamp(iso) {
+      if (!iso) return '-';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      const pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+        + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+    function statusChip(s) {
+      if (s === 'sent')    return '<span class="status-chip sent">✓ sent</span>';
+      if (s === 'pending') return '<span class="status-chip pending">⏳ pending</span>';
+      if (s === 'failed')  return '<span class="status-chip failed">✗ failed</span>';
+      return '<span class="status-chip" style="background:#f3f4f6;color:#4b5563">' + escapeHtml(s || '?') + '</span>';
+    }
+
+    // ========== 渲染 ==========
+    function renderNotice() {
+      return ''
+        + '<div class="email-notice">'
+        +   '<div class="email-notice-icon">📧</div>'
+        +   '<div>'
+        +     '<div class="email-notice-title">邮件发送日志（仅平台管理员）</div>'
+        +     '<div class="email-notice-body">'
+        +       '系统会记录每一次邮件尝试：邀请用户、密码重置、注册验证、计费通知。'
+        +       '<code>sent</code> = SMTP 投递成功 · <code>pending</code> = SMTP 未配置、仅写入控制台 · <code>failed</code> = SMTP 投递失败。'
+        +       '最多保留 5000 条。'
+        +     '</div>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    function renderFilterBar() {
+      const statusOptions = ['', 'sent', 'pending', 'failed'].map(function (s) {
+        const label = s === '' ? '全部状态' : s;
+        const selected = s === state.status ? ' selected' : '';
+        return '<option value="' + escapeAttr(s) + '"' + selected + '>' + escapeHtml(label) + '</option>';
+      }).join('');
+
+      const pageSizeOptions = [50, 100, 200, 500].map(function (n) {
+        const selected = n === state.limit ? ' selected' : '';
+        return '<option value="' + n + '"' + selected + '>' + n + ' 条/页</option>';
+      }).join('');
+
+      return ''
+        + '<div class="filter-bar">'
+        +   '<div class="form-group">'
+        +     '<label>收件人</label>'
+        +     '<input type="text" id="fEmail" placeholder="按邮箱过滤（精确匹配）" value="' + escapeAttr(state.toEmail) + '">'
+        +   '</div>'
+        +   '<div class="form-group">'
+        +     '<label>状态</label>'
+        +     '<select id="fStatus">' + statusOptions + '</select>'
+        +   '</div>'
+        +   '<div class="form-group">'
+        +     '<label>每页条数</label>'
+        +     '<select id="fLimit">' + pageSizeOptions + '</select>'
+        +   '</div>'
+        +   '<div class="filter-actions">'
+        +     '<button class="btn btn-primary btn-sm" id="fRefresh">🔄 刷新</button>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    function renderTable() {
+      if (state.items.length === 0) {
+        return '<div class="empty-state"><div class="empty-icon">📧</div><p>暂无邮件日志</p></div>';
+      }
+      const rows = state.items.map(function (it) {
+        return ''
+          + '<tr>'
+          +   '<td class="col-time mono">' + escapeHtml(formatTimestamp(it.sent_at)) + '</td>'
+          +   '<td class="col-to">' + escapeHtml(it.to_email) + '</td>'
+          +   '<td class="col-subject">' + escapeHtml(it.subject || '(无主题)') + '</td>'
+          +   '<td>' + statusChip(it.status) + '</td>'
+          +   '<td class="col-error">' + (it.error ? '<span style="color:#991b1b">' + escapeHtml(it.error) + '</span>' : '<span style="color:var(--text-secondary)">—</span>') + '</td>'
+          + '</tr>';
+      }).join('');
+
+      return ''
+        + '<div class="table-wrap">'
+        +   '<table class="email-table">'
+        +     '<thead><tr>'
+        +       '<th>时间</th><th>收件人</th><th>主题</th><th>状态</th><th>错误</th>'
+        +     '</tr></thead>'
+        +     '<tbody>' + rows + '</tbody>'
+        +   '</table>'
+        + '</div>';
+    }
+
+    function renderPagination() {
+      const start = state.total === 0 ? 0 : (state.offset + 1);
+      const end = Math.min(state.offset + state.items.length, state.total);
+      const prevDisabled = state.offset <= 0 ? 'disabled' : '';
+      const nextDisabled = (state.offset + state.limit) >= state.total ? 'disabled' : '';
+      return ''
+        + '<div class="pagination">'
+        +   '<div class="page-info">共 <b>' + state.total + '</b> 条 · 当前显示 <b>' + start + '-' + end + '</b></div>'
+        +   '<div class="page-buttons">'
+        +     '<button class="btn btn-secondary btn-sm" id="pPrev" ' + prevDisabled + '>‹ 上一页</button>'
+        +     '<button class="btn btn-secondary btn-sm" id="pNext" ' + nextDisabled + '>下一页 ›</button>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    function renderForbidden() {
+      document.getElementById('contentArea').innerHTML = ''
+        + '<div class="forbidden-card">'
+        +   '<div class="icon">🚫</div>'
+        +   '<h2>无权访问</h2>'
+        +   '<p>邮件日志仅对 <b>平台管理员</b> 开放。<br>当前租户账号无访问权限，请联系平台管理员。</p>'
+        +   '<div style="margin-top:18px"><a href="/admin/" class="btn btn-secondary btn-sm">返回总览</a></div>'
+        + '</div>';
+    }
+
+    function renderContent() {
+      const area = document.getElementById('contentArea');
+      if (state.loading && state.items.length === 0) {
+        area.innerHTML = renderNotice()
+          + '<div class="email-loading"><div class="spin"></div><div>加载中...</div></div>';
+        return;
+      }
+      area.innerHTML = renderNotice() + renderFilterBar() + renderTable() + renderPagination();
+      bindFilterEvents();
+    }
+
+    function bindFilterEvents() {
+      const fEmail   = document.getElementById('fEmail');
+      const fStatus  = document.getElementById('fStatus');
+      const fLimit   = document.getElementById('fLimit');
+      const fRefresh = document.getElementById('fRefresh');
+      const pPrev    = document.getElementById('pPrev');
+      const pNext    = document.getElementById('pNext');
+
+      if (fEmail) fEmail.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          state.toEmail = fEmail.value.trim();
+          state.offset = 0;
+          loadLogs();
+        }
+      });
+      if (fStatus) fStatus.addEventListener('change', function () {
+        state.status = fStatus.value;
+        state.offset = 0;
+        loadLogs();
+      });
+      if (fLimit) fLimit.addEventListener('change', function () {
+        state.limit = Number(fLimit.value) || 100;
+        state.offset = 0;
+        loadLogs();
+      });
+      if (fRefresh) fRefresh.addEventListener('click', function () {
+        // 重新拉一次 input 的当前值
+        const e = document.getElementById('fEmail');
+        if (e) state.toEmail = e.value.trim();
+        state.offset = 0;
+        loadLogs();
+      });
+      if (pPrev) pPrev.addEventListener('click', function () {
+        state.offset = Math.max(0, state.offset - state.limit);
+        loadLogs();
+      });
+      if (pNext) pNext.addEventListener('click', function () {
+        if (state.offset + state.limit < state.total) {
+          state.offset = state.offset + state.limit;
+          loadLogs();
+        }
+      });
+    }
+
+    // ========== API ==========
+    async function loadLogs() {
+      if (state.loading) return;
+      state.loading = true;
+      renderContent();
+
+      const params = ['limit=' + state.limit, 'offset=' + state.offset];
+      if (state.toEmail) params.push('to_email=' + encodeURIComponent(state.toEmail));
+      if (state.status)  params.push('status=' + encodeURIComponent(state.status));
+
+      try {
+        const result = await api.get('/admin/email-log?' + params.join('&'));
+        state.total = (result && result.total) || 0;
+        state.items = (result && result.items) || [];
+      } catch (e) {
+        state.items = [];
+        state.total = 0;
+        const msg = e.message || '';
+        if (/403|PLATFORM_ADMIN_REQUIRED|平台管理员/.test(msg)) {
+          renderForbidden();
+          state.loading = false;
+          return;
+        }
+        toast('加载邮件日志失败：' + msg, 'error');
+      } finally {
+        state.loading = false;
+        renderContent();
+      }
+    }
+
+    // ========== 启动 ==========
+    (async function init() {
+      const t = await MAG_AUTH.getTenant();
+      if (!t) return;  // requireAuth 已跳走
+
+      // 显隐侧边栏菜单
+      if (t.is_platform_admin) {
+        state.isPlatformAdmin = true;
+        document.querySelectorAll('.platform-only').forEach(function (el) { el.style.display = ''; });
+      }
+      // owner-only 菜单（用户管理）：通过 getRole 决定
+      const u = await MAG_AUTH.getUser();
+      if (u && u.role === 'owner') {
+        document.querySelectorAll('.owner-only').forEach(function (el) { el.style.display = ''; });
+      }
+
+      if (!t.is_platform_admin) {
+        renderForbidden();
+        return;
+      }
+
+      await loadLogs();
+    })();
+  </script>
+</body>
+</html>

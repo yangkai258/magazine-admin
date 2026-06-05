@@ -58,6 +58,12 @@
         <a href="/admin/audit.html" class="nav-item platform-only" data-page="audit" style="display:none">
           <span class="nav-icon">📋</span> 审计日志
         </a>
+        <a href="/admin/email-log.html" class="nav-item platform-only" data-page="email-log" style="display:none">
+          <span class="nav-icon">📧</span> 邮件日志
+        </a>
+        <a href="/admin/tenant-users.html" class="nav-item owner-only" data-page="tenant-users" style="display:none">
+          <span class="nav-icon">👥</span> 用户管理
+        </a>
       </nav>
     </aside>
     <main class="main-content">
@@ -83,7 +89,7 @@
           <select id="magazineSelect" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;min-width:180px">
             <option value="">全部杂志</option>
           </select>
-          <button class="btn btn-primary btn-sm" id="uploadBtn">+ 上传封面</button>
+          <button class="btn btn-primary btn-sm" id="uploadBtn" style="display:none">+ 上传封面</button>
           <input type="file" id="coverFileInput" accept="image/*" style="display:none">
         </div>
         <div class="cover-grid" id="coverGrid"></div>
@@ -97,10 +103,21 @@
 
   <script src="/admin/js/api.js"></script>
   <script>
-    // 平台管理员才显示「平台管理」「审计日志」菜单
+    // 平台管理员才显示「平台管理」「审计日志」菜单；owner 显示「用户管理」
     MAG_AUTH.getTenant().then(function(t) {
       if (t && t.is_platform_admin) {
         document.querySelectorAll('.platform-only').forEach(function(el) { el.style.display = ''; });
+      }
+    });
+    MAG_AUTH.getUser().then(function(u) {
+      if (u && u.role === 'owner') {
+        // 显示上传按钮
+        var uploadBtn = document.getElementById('uploadBtn');
+        if (uploadBtn) uploadBtn.style.display = '';
+        document.querySelectorAll('.owner-only').forEach(function(el) { el.style.display = ''; });
+        window.__isOwner = true;
+      } else {
+        window.__isOwner = false;
       }
     });
   </script>
@@ -173,6 +190,7 @@
 
       grid.innerHTML = covers.map(c => {
         const magazine = magazines.find(m => m.id == c.magazine_id);
+        const isOwner = !!window.__isOwner;
         return `
           <div class="cover-card" data-id="${c.id}">
             <img src="${coverImg(c.image_path)}" class="cover-card-img" onerror="this.style.display='none'">
@@ -181,7 +199,7 @@
               <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${c.type === 'pc' ? '🖥 PC端' : '📱 移动端'}</div>
               <div class="cover-card-meta">
                 <span class="cover-type-badge ${c.type === 'mobile' ? 'mobile' : ''}">${c.type === 'pc' ? 'PC' : 'Mobile'}</span>
-                <button class="btn btn-xs btn-danger" onclick="deleteCover(${c.id})">删除</button>
+                ${isOwner ? `<button class="btn btn-xs btn-danger" onclick="deleteCover(${c.id})">删除</button>` : ''}
               </div>
             </div>
           </div>
@@ -273,7 +291,8 @@
 
     // 初始显示 PC 规格
     updateSpec('pc');
-    load();
+    // 等待角色确定后 load（确保上传/删除按钮状态正确）
+    MAG_AUTH.getUser().then(function() { load(); });
   </script>
 </body>
 </html>

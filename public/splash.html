@@ -7,6 +7,10 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
+    /* ====== 品牌主色（默认 #4f46e5；JS 启动后用 tenant.primary_color 覆盖）====== */
+    :root {
+      --primary: #4f46e5;
+    }
     .splash {
       position: fixed; inset: 0;
       display: flex; align-items: center; justify-content: center;
@@ -42,6 +46,19 @@
       filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
     }
     .splash-logo.show { opacity: 1; transform: scale(1); }
+    .splash-logo-fallback {
+      width: 56px; height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      opacity: 0;
+      transform: scale(0.85);
+      transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
+    }
+    .splash-logo-fallback.show { opacity: 1; transform: scale(1); }
+    /* ====== 标题：应用租户主色 ====== */
     .splash-title {
       margin-top: 12px;
       color: #fff;
@@ -51,17 +68,25 @@
       letter-spacing: 6px;
       opacity: 0;
       text-shadow: 0 2px 12px rgba(0,0,0,0.5);
-      transition: opacity 0.5s 0.4s;
+      transition: opacity 0.5s 0.4s, color 0.3s;
     }
     .splash-title.show { opacity: 1; }
+    .splash-title.branded {
+      /* 应用主色 + 描边增强：封面背景多变，保证可读性 */
+      color: var(--primary);
+      -webkit-text-stroke: 1px rgba(255,255,255,0.6);
+      text-shadow: 0 0 8px rgba(0,0,0,0.6), 0 2px 12px rgba(0,0,0,0.5);
+    }
     .splash-line {
       margin-top: 8px;
-      width: 30px; height: 1.5px;
+      width: 30px; height: 2px;
       background: rgba(255,255,255,0.6);
       opacity: 0;
-      transition: opacity 0.5s 0.6s;
+      transition: opacity 0.5s 0.6s, background 0.3s, width 0.4s;
     }
     .splash-line.show { opacity: 1; }
+    .splash-line.branded { background: var(--primary); width: 50px; }
+    /* ====== Skip 按钮：应用主色 ====== */
     .splash-skip {
       position: fixed; bottom: 24px;
       left: 50%; transform: translateX(-50%);
@@ -70,16 +95,30 @@
       font-family: 'PingFang SC', sans-serif;
       letter-spacing: 1px;
       opacity: 0;
-      transition: opacity 0.5s 1s;
+      transition: opacity 0.5s 1s, background 0.3s, color 0.3s, padding 0.3s;
       cursor: pointer;
       z-index: 3;
       text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      padding: 8px 22px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.25);
+      user-select: none;
     }
     .splash-skip.show { opacity: 1; }
+    .splash-skip:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+      text-shadow: none;
+      padding: 8px 28px;
+    }
     /* 移动端：底部条上移 */
     @media (max-width: 768px) {
       .splash-info { bottom: 72px; }
-      .splash-logo { width: 44px; height: 44px; }
+      .splash-logo, .splash-logo-fallback { width: 44px; height: 44px; }
       .splash-title { font-size: 15px; letter-spacing: 4px; }
     }
   </style>
@@ -88,14 +127,16 @@
 <div class="splash" id="splash">
   <img class="splash-cover" id="cover" alt="">
   <div class="splash-info">
-    <img class="splash-logo" id="logo" src="images/logo.png" alt="logo">
+    <img class="splash-logo" id="logo" src="images/logo.png" alt="logo" onerror="this.style.display='none';var f=document.getElementById('logoFallback');if(f)f.style.display='flex';">
+    <div class="splash-logo-fallback" id="logoFallback" style="display:none">📚</div>
     <div class="splash-title" id="title">电子刊</div>
     <div class="splash-line" id="line"></div>
   </div>
 </div>
-<div class="splash-skip" id="skip">点击跳过</div>
+<div class="splash-skip" id="skip">点击进入 →</div>
 
 <script src="config.js"></script>
+<script src="reader/track.js"></script>
 <script>
 (function() {
   // ====== 多租户：解析当前 tenant slug ======
@@ -148,12 +189,40 @@
     return null;
   }
 
+  // ====== 应用租户品牌（主色 + logo）======
+  function applyBranding(tenant) {
+    if (!tenant) return;
+    // 1) 主色：写入 CSS 变量
+    var color = tenant.primary_color || (window.MAG_CONFIG && window.MAG_CONFIG.PRIMARY_COLOR) || '#4f46e5';
+    document.documentElement.style.setProperty('--primary', color);
+    // 2) 标题：应用主色
+    var title = document.getElementById('title');
+    if (title) title.classList.add('branded');
+    // 3) 装饰线：加粗 + 主色
+    var line = document.getElementById('line');
+    if (line) line.classList.add('branded');
+    // 4) Logo：替换 src（fallback 已通过 onerror 处理）
+    if (tenant.logo_url) {
+      var logo = document.getElementById('logo');
+      if (logo) {
+        logo.src = tenant.logo_url;
+        logo.style.display = '';
+        var fb = document.getElementById('logoFallback');
+        if (fb) fb.style.display = 'none';
+      }
+    }
+  }
+
   // 拉封面：按当前 tenant + 设备类型 取全局（magazine_id=null）的最新一张
   function loadCover() {
     var type = detectDeviceType();
     return loadData().then(function(data) {
       var tenant = findTenant(data, tenantSlug);
       if (!tenant) throw new Error('tenant "' + tenantSlug + '" 不存在');
+
+      // 应用品牌（主色 + logo）
+      applyBranding(tenant);
+
       // 标题用租户名
       var $title = document.getElementById('title');
       $title.textContent = (tenant.name || '') + '电子刊';
@@ -182,16 +251,31 @@
   function fallbackToLogo() {
     console.warn('[splash] 拉封面失败，降级到 logo');
     var $logo = document.getElementById('logo');
-    $logo.style.width = '180px';
-    $logo.style.height = '180px';
-    $logo.style.filter = 'invert(1) drop-shadow(0 2px 8px rgba(0,0,0,0.3))';
+    if ($logo && $logo.complete && $logo.naturalWidth > 0) {
+      $logo.style.width = '180px';
+      $logo.style.height = '180px';
+      $logo.style.filter = 'invert(1) drop-shadow(0 2px 8px rgba(0,0,0,0.3))';
+    } else {
+      // 启用 fallback emoji
+      var fb = document.getElementById('logoFallback');
+      if (fb) {
+        fb.style.display = 'flex';
+        fb.style.width = '180px';
+        fb.style.height = '180px';
+        fb.style.fontSize = '120px';
+        fb.style.opacity = '0.6';
+      }
+    }
     document.querySelector('.splash').style.background = '#2a2a2a';
   }
 
   // 启动：拉封面 + 动画
   window.addEventListener('load', function() {
-    loadCover().catch(fallbackToLogo);
-    setTimeout(function() { document.getElementById('logo').classList.add('show'); }, 100);
+    loadCover().then(function() {
+      // 埋点：splash 展示（tenant-level view，不带 magazine_id）
+      try { window.MAG_TRACK.trackEvent({ tenant_slug: tenantSlug, event_type: 'view' }); } catch (e) {}
+    }).catch(fallbackToLogo);
+    setTimeout(function() { document.getElementById('logo').classList.add('show'); document.getElementById('logoFallback').classList.add('show'); }, 100);
     setTimeout(function() { document.getElementById('title').classList.add('show'); }, 400);
     setTimeout(function() { document.getElementById('line').classList.add('show'); }, 600);
     setTimeout(function() { document.getElementById('skip').classList.add('show'); }, 800);
