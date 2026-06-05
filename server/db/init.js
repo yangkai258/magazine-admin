@@ -1,19 +1,31 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const dataPath = path.join(__dirname, 'data.json');
 
 const defaultData = {
   tenants: [],
+  users: [],
+  plans: [],
+  subscriptions: [],
+  invoices: [],
+  payment_methods: [],
   magazines: [],
   pages: [],
   covers: [],
-  audit_log: []
+  audit_log: [],
+  reader_analytics: [],
+  signup_tokens: [],
+  password_reset_tokens: [],
+  email_log: [],
+  user_invitations: [],
+  _meta: { schema_version: 4 }
 };
 
 let data = loadData();
 
-// 热重载：data.json 被外部修改后自动重新加载（无需重启服务）
+// 热重载：data.json 被外部修改后自动重新加载
 try {
   fs.watchFile(dataPath, { interval: 1000 }, (curr, prev) => {
     if (curr.mtimeMs === prev.mtimeMs) return;
@@ -29,14 +41,25 @@ function loadData() {
     if (fs.existsSync(dataPath)) {
       const raw = fs.readFileSync(dataPath, 'utf8');
       const parsed = JSON.parse(raw);
-      // 兼容旧数据（schema v1/v2 缺字段）
-      if (!parsed.tenants) parsed.tenants = [];
-      if (!parsed.audit_log) parsed.audit_log = [];
-      // 兼容：老 tenants 缺 is_platform_admin / suspended
+      // 兼容旧数据（schema v1/v2/v3 缺字段）
+      const requiredArrays = [
+        'tenants', 'users', 'plans', 'subscriptions', 'invoices', 'payment_methods',
+        'magazines', 'pages', 'covers', 'audit_log', 'reader_analytics',
+        'signup_tokens', 'password_reset_tokens', 'email_log', 'user_invitations'
+      ];
+      requiredArrays.forEach(k => { if (!parsed[k]) parsed[k] = []; });
+      // 兼容老 tenants 缺字段
       parsed.tenants.forEach(t => {
         if (t.is_platform_admin === undefined) t.is_platform_admin = false;
         if (t.suspended === undefined) t.suspended = false;
+        if (t.logo_url === undefined) t.logo_url = '';
+        if (t.primary_color === undefined) t.primary_color = '#4f46e5';
+        if (t.plan_id === undefined) t.plan_id = null;
+        if (t.subscription_status === undefined) t.subscription_status = 'active';
+        if (t.trial_ends_at === undefined) t.trial_ends_at = null;
       });
+      // 缺 _meta
+      if (!parsed._meta) parsed._meta = { schema_version: 3, migrated_at: new Date().toISOString() };
       return parsed;
     }
   } catch (e) { console.error('loadData error:', e.message); }
@@ -50,36 +73,42 @@ function saveData() {
 }
 
 function nextId(arr) {
+  if (!arr) arr = [];
   if (arr.length === 0) return 1;
-  return Math.max(...arr.map(i => i.id)) + 1;
+  return Math.max(...arr.map(i => i.id || 0)) + 1;
+}
+
+function randomToken(bytes = 32) {
+  return crypto.randomBytes(bytes).toString('hex');
+}
+
+function hashPassword(password) {
+  // 简化：SHA-256 + salt（生产环境应该用 bcrypt/argon2）
+  const salt = 'mag-static-salt-v4';
+  return crypto.createHash('sha256').update(salt + password).digest('hex');
 }
 
 // ========== Tenants ==========
-function getAllTenants() {
-  return (data.tenants || []).slice().sort((a, b) => a.id - b.id);
-}
+function getAllTenants() { return (data.tenants || []).slice().sort((a, b) => a.id - b.id); }
+function getTenant(id) { return (data.tenants || []).find(t => t.id === Number(id)); }
+function getTenantBySlug(slug) { return (data.tenants || []).find(t => t.slug === slug); }
 
-function getTenant(id) {
-  return (data.tenants || []).find(t => t.id === Number(id));
-}
-
-function getTenantBySlug(slug) {
-  return (data.tenants || []).find(t => t.slug === slug);
-}
-
-function createTenant({ slug, name, password, is_platform_admin }) {
+function createTenant({ slug, name, logo_url, primary_color, plan_id }) {
   if (!slug || !name) throw new Error('slug and name are required');
   if (getTenantBySlug(slug)) throw new Error(`tenant slug '${slug}' already exists`);
   const tenant = {
-    id: nextId(data.tenants || []),
-    slug,
-    name,
-    password: password || '',  // 空密码 = 不可登录
-    is_platform_admin: !!is_platform_admin,
+    id: nextId(data.tenants),
+    slug, name,
+    logo_url: logo_url || '',
+    primary_color: primary_color || '#4f46e5',
+    is_platform_admin: false,
     suspended: false,
+    plan_id: plan_id || null,
+    subscription_status: 'active',
+    trial_ends_at: null,
+    password: '',  // 老字段保留：tenant-level fallback 密码（不推荐用，新流程走 user）
     created_at: new Date().toISOString()
   };
-  if (!data.tenants) data.tenants = [];
   data.tenants.push(tenant);
   saveData();
   return tenant;
@@ -88,7 +117,6 @@ function createTenant({ slug, name, password, is_platform_admin }) {
 function updateTenant(id, fields) {
   const idx = (data.tenants || []).findIndex(t => t.id === Number(id));
   if (idx === -1) return null;
-  // 保留 id 和 created_at
   data.tenants[idx] = {
     ...data.tenants[idx],
     ...fields,
@@ -99,41 +127,303 @@ function updateTenant(id, fields) {
   return data.tenants[idx];
 }
 
-function setTenantSuspended(id, suspended) {
-  return updateTenant(id, { suspended: !!suspended });
-}
-
+function setTenantSuspended(id, suspended) { return updateTenant(id, { suspended: !!suspended }); }
 function deleteTenant(id) {
   const tid = Number(id);
   if (!(data.tenants || []).find(t => t.id === tid)) return false;
   data.tenants = data.tenants.filter(t => t.id !== tid);
-  // 级联删除该租户的所有数据
+  data.users = data.users.filter(u => u.tenant_id !== tid);
   data.magazines = data.magazines.filter(m => m.tenant_id !== tid);
   data.pages = data.pages.filter(p => p.tenant_id !== tid);
   data.covers = data.covers.filter(c => c.tenant_id !== tid);
+  data.subscriptions = data.subscriptions.filter(s => s.tenant_id !== tid);
+  data.invoices = data.invoices.filter(i => i.tenant_id !== tid);
+  data.payment_methods = data.payment_methods.filter(p => p.tenant_id !== tid);
+  data.user_invitations = data.user_invitations.filter(i => i.tenant_id !== tid);
   saveData();
   return true;
 }
 
-function verifyTenantPassword(slug, password) {
-  const tenant = getTenantBySlug(slug);
-  if (!tenant) return null;
-  if (tenant.suspended) return null;  // 暂停的租户不能登录
-  if (!tenant.password) return null;  // 没设密码不能登录
-  if (tenant.password !== password) return null;
-  return tenant;
+// ========== Users（v4 新增） ==========
+function getAllUsers({ tenantId } = {}) {
+  let list = data.users || [];
+  if (tenantId !== undefined && tenantId !== null) {
+    list = list.filter(u => u.tenant_id === Number(tenantId));
+  }
+  return list.sort((a, b) => a.id - b.id);
+}
+function getUser(id) { return (data.users || []).find(u => u.id === Number(id)); }
+function getUserByEmail(tenantId, email) {
+  return (data.users || []).find(u => u.tenant_id === Number(tenantId) && u.email.toLowerCase() === email.toLowerCase());
 }
 
-// ========== Audit Log ==========
+function createUser({ tenant_id, email, password, role, name }) {
+  if (!tenant_id) throw new Error('tenant_id required');
+  if (!email || !password) throw new Error('email and password required');
+  if (!['owner', 'editor', 'viewer'].includes(role)) throw new Error('role must be owner/editor/viewer');
+  if (getUserByEmail(tenant_id, email)) throw new Error(`email ${email} already exists in this tenant`);
+  const user = {
+    id: nextId(data.users),
+    tenant_id: Number(tenant_id),
+    email: email.toLowerCase(),
+    password_hash: hashPassword(password),
+    role,
+    name: name || email.split('@')[0],
+    status: 'active',
+    created_at: new Date().toISOString(),
+    last_login_at: null
+  };
+  data.users.push(user);
+  saveData();
+  return user;
+}
+
+function updateUser(id, fields) {
+  const idx = (data.users || []).findIndex(u => u.id === Number(id));
+  if (idx === -1) return null;
+  if (fields.password) fields.password_hash = hashPassword(fields.password);
+  delete fields.password;
+  data.users[idx] = { ...data.users[idx], ...fields, id: data.users[idx].id, created_at: data.users[idx].created_at };
+  saveData();
+  return data.users[idx];
+}
+
+function setUserPassword(id, password) {
+  return updateUser(id, { password_hash: hashPassword(password) });
+}
+
+function deleteUser(id) {
+  const idx = (data.users || []).findIndex(u => u.id === Number(id));
+  if (idx === -1) return false;
+  data.users.splice(idx, 1);
+  saveData();
+  return true;
+}
+
+function verifyUserPassword(tenantId, email, password) {
+  const user = getUserByEmail(tenantId, email);
+  if (!user) return null;
+  if (user.status !== 'active') return null;
+  const tenant = getTenant(tenantId);
+  if (tenant && tenant.suspended) return null;
+  if (user.password_hash !== hashPassword(password)) return null;
+  return user;
+}
+
+// ========== Plans / Subscriptions / Invoices（计费基础） ==========
+function getAllPlans() { return (data.plans || []).sort((a, b) => (a.price_monthly_cny || 0) - (b.price_monthly_cny || 0)); }
+function getPlan(id) { return (data.plans || []).find(p => p.id === Number(id)); }
+function getPlanBySlug(slug) { return (data.plans || []).find(p => p.slug === slug); }
+function createPlan({ slug, name, price_monthly_cny, features }) {
+  const plan = { id: nextId(data.plans), slug, name, price_monthly_cny: price_monthly_cny || 0, features: features || {} };
+  data.plans.push(plan);
+  saveData();
+  return plan;
+}
+
+function getActiveSubscription(tenantId) {
+  const now = Date.now();
+  return (data.subscriptions || []).find(s =>
+    s.tenant_id === Number(tenantId) &&
+    s.status === 'active' &&
+    new Date(s.ends_at).getTime() > now
+  );
+}
+
+function createSubscription({ tenant_id, plan_id, started_at, ends_at, status, external_id }) {
+  const sub = {
+    id: nextId(data.subscriptions),
+    tenant_id: Number(tenant_id),
+    plan_id: Number(plan_id),
+    started_at: started_at || new Date().toISOString(),
+    ends_at: ends_at || new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+    status: status || 'active',
+    external_id: external_id || null,
+    created_at: new Date().toISOString()
+  };
+  data.subscriptions.push(sub);
+  saveData();
+  return sub;
+}
+
+function getInvoices(tenantId) {
+  return (data.invoices || [])
+    .filter(i => i.tenant_id === Number(tenantId))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+function createInvoice({ tenant_id, plan_id, amount_cny, period_start, period_end, status, external_id, payment_method }) {
+  const inv = {
+    id: nextId(data.invoices),
+    tenant_id: Number(tenant_id),
+    plan_id: Number(plan_id),
+    amount_cny: amount_cny || 0,
+    currency: 'CNY',
+    period_start: period_start || new Date().toISOString(),
+    period_end: period_end || new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+    status: status || 'pending',  // pending / paid / failed / refunded
+    external_id: external_id || null,
+    payment_method: payment_method || null,
+    created_at: new Date().toISOString(),
+    paid_at: null
+  };
+  data.invoices.push(inv);
+  saveData();
+  return inv;
+}
+function updateInvoice(id, fields) {
+  const idx = (data.invoices || []).findIndex(i => i.id === Number(id));
+  if (idx === -1) return null;
+  data.invoices[idx] = { ...data.invoices[idx], ...fields };
+  saveData();
+  return data.invoices[idx];
+}
+
+function getPaymentMethods(tenantId) {
+  return (data.payment_methods || []).filter(p => p.tenant_id === Number(tenantId));
+}
+function createPaymentMethod({ tenant_id, type, external_account, label }) {
+  const m = {
+    id: nextId(data.payment_methods),
+    tenant_id: Number(tenant_id),
+    type,  // 'alipay' | 'wechat'
+    external_account: external_account || '',
+    label: label || '',
+    created_at: new Date().toISOString()
+  };
+  data.payment_methods.push(m);
+  saveData();
+  return m;
+}
+function deletePaymentMethod(id) {
+  const before = (data.payment_methods || []).length;
+  data.payment_methods = data.payment_methods.filter(p => p.id !== Number(id));
+  saveData();
+  return data.payment_methods.length < before;
+}
+
+// ========== Signup / Password Reset Tokens ==========
+function createSignupToken({ email, tenant_slug, tenant_name, token, expires_in_hours }) {
+  const t = {
+    id: nextId(data.signup_tokens),
+    email: email.toLowerCase(),
+    tenant_slug,
+    tenant_name,
+    token: token || randomToken(),
+    expires_at: new Date(Date.now() + (expires_in_hours || 24) * 3600 * 1000).toISOString(),
+    used_at: null,
+    created_at: new Date().toISOString()
+  };
+  data.signup_tokens.push(t);
+  saveData();
+  return t;
+}
+function getSignupToken(token) {
+  return (data.signup_tokens || []).find(t => t.token === token);
+}
+function markSignupTokenUsed(token) {
+  const t = getSignupToken(token);
+  if (!t) return null;
+  t.used_at = new Date().toISOString();
+  saveData();
+  return t;
+}
+
+function createPasswordResetToken(userId) {
+  // 同一个 user 只保留一个未使用的 token
+  data.password_reset_tokens = (data.password_reset_tokens || []).filter(t => t.user_id !== userId || t.used_at);
+  const t = {
+    id: nextId(data.password_reset_tokens),
+    user_id: userId,
+    token: randomToken(),
+    expires_at: new Date(Date.now() + 1 * 3600 * 1000).toISOString(),  // 1h
+    used_at: null,
+    created_at: new Date().toISOString()
+  };
+  data.password_reset_tokens.push(t);
+  saveData();
+  return t;
+}
+function getPasswordResetToken(token) {
+  return (data.password_reset_tokens || []).find(t => t.token === token);
+}
+function markPasswordResetTokenUsed(token) {
+  const t = getPasswordResetToken(token);
+  if (!t) return null;
+  t.used_at = new Date().toISOString();
+  saveData();
+  return t;
+}
+
+function createUserInvitation({ tenant_id, email, role, invited_by, token, expires_in_hours }) {
+  const inv = {
+    id: nextId(data.user_invitations),
+    tenant_id: Number(tenant_id),
+    email: email.toLowerCase(),
+    role,
+    invited_by: Number(invited_by),
+    token: token || randomToken(),
+    expires_at: new Date(Date.now() + (expires_in_hours || 72) * 3600 * 1000).toISOString(),
+    accepted_at: null,
+    created_at: new Date().toISOString()
+  };
+  data.user_invitations.push(inv);
+  saveData();
+  return inv;
+}
+function getUserInvitations(tenantId) {
+  return (data.user_invitations || [])
+    .filter(i => i.tenant_id === Number(tenantId))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+function getUserInvitationByToken(token) {
+  return (data.user_invitations || []).find(i => i.token === token);
+}
+function markUserInvitationAccepted(token) {
+  const inv = getUserInvitationByToken(token);
+  if (!inv) return null;
+  inv.accepted_at = new Date().toISOString();
+  saveData();
+  return inv;
+}
+
+// ========== Email Log ==========
+function logEmail({ to_email, subject, body, status, error }) {
+  const entry = {
+    id: nextId(data.email_log),
+    to_email,
+    subject: subject || '',
+    body: body || '',
+    status: status || 'sent',  // sent / failed / pending
+    error: error || null,
+    sent_at: new Date().toISOString()
+  };
+  data.email_log.push(entry);
+  // 限 5000 条
+  if (data.email_log.length > 5000) data.email_log = data.email_log.slice(-5000);
+  saveData();
+  return entry;
+}
+function getEmailLog({ to_email, status, limit = 200, offset = 0 } = {}) {
+  let list = (data.email_log || []).slice();
+  if (to_email) list = list.filter(e => e.to_email === to_email);
+  if (status) list = list.filter(e => e.status === status);
+  list.sort((a, b) => b.sent_at.localeCompare(a.sent_at));
+  return { total: list.length, items: list.slice(offset, offset + limit) };
+}
+
+// ========== Audit Log（v3 已加，保留） ==========
 function addAuditLog(entry) {
   if (!data.audit_log) data.audit_log = [];
   const log = {
     id: nextId(data.audit_log),
     timestamp: new Date().toISOString(),
+    actor_user_id: entry.actor_user_id || null,
+    actor_user_email: entry.actor_user_email || null,
     actor_tenant_id: entry.actor_tenant_id || null,
     actor_tenant_slug: entry.actor_tenant_slug || null,
     actor_is_platform_admin: !!entry.actor_is_platform_admin,
-    tenant_id: entry.tenant_id || null,  // 受影响租户
+    actor_role: entry.actor_role || null,
+    tenant_id: entry.tenant_id || null,
     action: entry.action,
     target_type: entry.target_type || null,
     target_id: entry.target_id || null,
@@ -142,45 +432,89 @@ function addAuditLog(entry) {
     user_agent: entry.user_agent || null
   };
   data.audit_log.push(log);
-  // 防止 log 无限增长：保留最近 10000 条
-  if (data.audit_log.length > 10000) {
-    data.audit_log = data.audit_log.slice(-10000);
-  }
+  if (data.audit_log.length > 10000) data.audit_log = data.audit_log.slice(-10000);
   saveData();
   return log;
 }
-
-function getAuditLogs({ tenantId, actorTenantId, action, limit = 200, offset = 0 } = {}) {
+function getAuditLogs({ tenantId, actorUserId, action, limit = 200, offset = 0 } = {}) {
   let list = (data.audit_log || []).slice();
-  if (tenantId !== undefined && tenantId !== null) {
-    list = list.filter(l => l.tenant_id === Number(tenantId));
-  }
-  if (actorTenantId !== undefined && actorTenantId !== null) {
-    list = list.filter(l => l.actor_tenant_id === Number(actorTenantId));
-  }
-  if (action) {
-    list = list.filter(l => l.action === action);
-  }
-  // 按时间倒序
+  if (tenantId !== undefined && tenantId !== null) list = list.filter(l => l.tenant_id === Number(tenantId));
+  if (actorUserId !== undefined && actorUserId !== null) list = list.filter(l => l.actor_user_id === Number(actorUserId));
+  if (action) list = list.filter(l => l.action === action);
   list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  return {
-    total: list.length,
-    items: list.slice(offset, offset + limit)
-  };
+  return { total: list.length, items: list.slice(offset, offset + limit) };
 }
 
-// ========== Magazines ==========
-// 租户过滤：调用方传 tenantId 才过滤；传 null/undefined 返回所有租户（仅平台管理员用）
+// ========== Reader Analytics（v4 新增） ==========
+function addReaderEvent(event) {
+  if (!data.reader_analytics) data.reader_analytics = [];
+  const e = {
+    id: nextId(data.reader_analytics),
+    tenant_id: Number(event.tenant_id),
+    magazine_id: event.magazine_id ? Number(event.magazine_id) : null,
+    page_id: event.page_id ? Number(event.page_id) : null,
+    viewer_id: event.viewer_id || 'anon',  // 匿名访客 hash
+    event_type: event.event_type,  // view / dwell / complete
+    page_number: event.page_number || null,
+    duration_ms: event.duration_ms || null,
+    referrer: event.referrer || null,
+    user_agent: event.user_agent || null,
+    ts: new Date().toISOString()
+  };
+  data.reader_analytics.push(e);
+  // 限 50000 条
+  if (data.reader_analytics.length > 50000) data.reader_analytics = data.reader_analytics.slice(-50000);
+  saveData();
+  return e;
+}
+function getReaderStats({ tenantId, magazineId, since, until } = {}) {
+  const events = (data.reader_analytics || []).filter(e => {
+    if (tenantId !== undefined && e.tenant_id !== Number(tenantId)) return false;
+    if (magazineId !== undefined && e.magazine_id !== Number(magazineId)) return false;
+    if (since && new Date(e.ts) < new Date(since)) return false;
+    if (until && new Date(e.ts) > new Date(until)) return false;
+    return true;
+  });
+  const views = events.filter(e => e.event_type === 'view');
+  const completes = events.filter(e => e.event_type === 'complete');
+  const dwells = events.filter(e => e.event_type === 'dwell' && e.duration_ms);
+  const uniqueViewers = new Set(views.map(e => e.viewer_id)).size;
+  return {
+    total_views: views.length,
+    unique_viewers: uniqueViewers,
+    completes: completes.length,
+    avg_dwell_ms: dwells.length > 0 ? Math.round(dwells.reduce((s, e) => s + (e.duration_ms || 0), 0) / dwells.length) : 0,
+    events
+  };
+}
+function getReaderStatsByMagazine(tenantId, since) {
+  const stats = getReaderStats({ tenantId, since });
+  const byMag = {};
+  stats.events.forEach(e => {
+    if (!e.magazine_id) return;
+    if (!byMag[e.magazine_id]) byMag[e.magazine_id] = { magazine_id: e.magazine_id, views: 0, unique_viewers: new Set(), completes: 0, dwell_total_ms: 0, dwell_count: 0 };
+    byMag[e.magazine_id].views++;
+    byMag[e.magazine_id].unique_viewers.add(e.viewer_id);
+    if (e.event_type === 'complete') byMag[e.magazine_id].completes++;
+    if (e.event_type === 'dwell' && e.duration_ms) { byMag[e.magazine_id].dwell_total_ms += e.duration_ms; byMag[e.magazine_id].dwell_count++; }
+  });
+  return Object.values(byMag).map(s => ({
+    magazine_id: s.magazine_id,
+    views: s.views,
+    unique_viewers: s.unique_viewers.size,
+    completes: s.completes,
+    avg_dwell_ms: s.dwell_count > 0 ? Math.round(s.dwell_total_ms / s.dwell_count) : 0
+  })).sort((a, b) => b.views - a.views);
+}
+
+// ========== Magazines / Pages / Covers (v3 已加，保留签名) ==========
 function getAllMagazines({ tenantId, search, enabled } = {}) {
   let list = data.magazines;
-  if (tenantId !== undefined && tenantId !== null) {
-    list = list.filter(m => m.tenant_id === Number(tenantId));
-  }
+  if (tenantId !== undefined && tenantId !== null) list = list.filter(m => m.tenant_id === Number(tenantId));
   if (search !== undefined) list = list.filter(m => m.name.includes(search));
   if (enabled !== undefined) list = list.filter(m => m.enabled === Number(enabled));
   return list.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
-
 function getMagazine(id, { tenantId } = {}) {
   return data.magazines.find(m => {
     if (m.id !== Number(id)) return false;
@@ -188,21 +522,18 @@ function getMagazine(id, { tenantId } = {}) {
     return true;
   });
 }
-
 function createMagazine(tenantId, { name, upload_date, description, cover_pc, cover_mobile }) {
   const mag = {
     id: nextId(data.magazines),
     tenant_id: Number(tenantId),
     name, upload_date, description: description || '',
     cover_pc: cover_pc || '', cover_mobile: cover_mobile || '',
-    enabled: 1,
-    created_at: new Date().toISOString()
+    enabled: 1, created_at: new Date().toISOString()
   };
   data.magazines.push(mag);
   saveData();
   return mag;
 }
-
 function updateMagazine(id, fields, { tenantId } = {}) {
   const idx = data.magazines.findIndex(m => {
     if (m.id !== Number(id)) return false;
@@ -214,7 +545,6 @@ function updateMagazine(id, fields, { tenantId } = {}) {
   saveData();
   return data.magazines[idx];
 }
-
 function deleteMagazine(id, { tenantId } = {}) {
   const before = data.magazines.length;
   data.magazines = data.magazines.filter(m => {
@@ -230,8 +560,6 @@ function deleteMagazine(id, { tenantId } = {}) {
   saveData();
   return data.magazines.length < before;
 }
-
-// ========== Pages ==========
 function getPages(magazineId, { tenantId } = {}) {
   return data.pages
     .filter(p => {
@@ -241,41 +569,22 @@ function getPages(magazineId, { tenantId } = {}) {
     })
     .sort((a, b) => a.page_order - b.page_order);
 }
-
 function addPage(tenantId, magazineId, imagePath) {
-  const maxOrder = data.pages
-    .filter(p => p.magazine_id === Number(magazineId))
-    .reduce((max, p) => Math.max(max, p.page_order), 0);
-  const page = {
-    id: nextId(data.pages),
-    tenant_id: Number(tenantId),
-    magazine_id: Number(magazineId),
-    page_order: maxOrder + 1,
-    image_path: imagePath,
-    created_at: new Date().toISOString()
-  };
+  const maxOrder = data.pages.filter(p => p.magazine_id === Number(magazineId)).reduce((max, p) => Math.max(max, p.page_order), 0);
+  const page = { id: nextId(data.pages), tenant_id: Number(tenantId), magazine_id: Number(magazineId), page_order: maxOrder + 1, image_path: imagePath, created_at: new Date().toISOString() };
   data.pages.push(page);
   saveData();
   return page;
 }
-
 function addPages(tenantId, magazineId, imagePaths) {
-  const maxOrder = data.pages
-    .filter(p => p.magazine_id === Number(magazineId))
-    .reduce((max, p) => Math.max(max, p.page_order), 0);
+  const maxOrder = data.pages.filter(p => p.magazine_id === Number(magazineId)).reduce((max, p) => Math.max(max, p.page_order), 0);
   const newPages = imagePaths.map((image_path, i) => ({
-    id: nextId(data.pages) + i,
-    tenant_id: Number(tenantId),
-    magazine_id: Number(magazineId),
-    page_order: maxOrder + 1 + i,
-    image_path,
-    created_at: new Date().toISOString()
+    id: nextId(data.pages) + i, tenant_id: Number(tenantId), magazine_id: Number(magazineId), page_order: maxOrder + 1 + i, image_path, created_at: new Date().toISOString()
   }));
   data.pages.push(...newPages);
   saveData();
   return newPages;
 }
-
 function reorderPages(magazineId, orderedIds, { tenantId } = {}) {
   orderedIds.forEach((id, index) => {
     const page = data.pages.find(p => {
@@ -288,7 +597,6 @@ function reorderPages(magazineId, orderedIds, { tenantId } = {}) {
   saveData();
   return true;
 }
-
 function deletePage(magazineId, pageId, { tenantId } = {}) {
   const before = data.pages.length;
   data.pages = data.pages.filter(p => {
@@ -301,39 +609,21 @@ function deletePage(magazineId, pageId, { tenantId } = {}) {
   saveData();
   return data.pages.length < before;
 }
-
-// ========== Covers ==========
 function getAllCovers({ tenantId, magazine_id } = {}) {
   let list = data.covers;
-  if (tenantId !== undefined && tenantId !== null) {
-    list = list.filter(c => c.tenant_id === Number(tenantId));
-  }
+  if (tenantId !== undefined && tenantId !== null) list = list.filter(c => c.tenant_id === Number(tenantId));
   if (magazine_id !== undefined) list = list.filter(c => c.magazine_id === Number(magazine_id));
   return list.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
-
 function createCover(tenantId, { magazine_id, type, image_path }) {
-  // 如果同租户+同杂志+同类型存在，先删掉（保证唯一）
   if (magazine_id && type) {
-    data.covers = data.covers.filter(c => !(
-      c.tenant_id === Number(tenantId) &&
-      c.magazine_id === Number(magazine_id) &&
-      c.type === type
-    ));
+    data.covers = data.covers.filter(c => !(c.tenant_id === Number(tenantId) && c.magazine_id === Number(magazine_id) && c.type === type));
   }
-  const cover = {
-    id: nextId(data.covers),
-    tenant_id: Number(tenantId),
-    magazine_id: magazine_id ? Number(magazine_id) : null,
-    type,
-    image_path,
-    created_at: new Date().toISOString()
-  };
+  const cover = { id: nextId(data.covers), tenant_id: Number(tenantId), magazine_id: magazine_id ? Number(magazine_id) : null, type, image_path, created_at: new Date().toISOString() };
   data.covers.push(cover);
   saveData();
   return cover;
 }
-
 function deleteCover(id, { tenantId } = {}) {
   const before = data.covers.length;
   data.covers = data.covers.filter(c => {
@@ -345,7 +635,6 @@ function deleteCover(id, { tenantId } = {}) {
   return data.covers.length < before;
 }
 
-// ========== 租户用量统计（平台管理用） ==========
 function getTenantUsage(tenantId) {
   const tid = Number(tenantId);
   return {
@@ -353,24 +642,24 @@ function getTenantUsage(tenantId) {
     magazine_count: data.magazines.filter(m => m.tenant_id === tid).length,
     enabled_magazine_count: data.magazines.filter(m => m.tenant_id === tid && m.enabled === 1).length,
     page_count: data.pages.filter(p => p.tenant_id === tid).length,
-    cover_count: data.covers.filter(c => c.tenant_id === tid).length
+    cover_count: data.covers.filter(c => c.tenant_id === tid).length,
+    user_count: (data.users || []).filter(u => u.tenant_id === tid).length
   };
 }
 
-// ========== Publish ==========
-// 把内存中当前 data 序列化成 publish-safe 的快照（不含 password 和内部字段）
 function snapshotForPublish() {
   return {
     tenants: (data.tenants || [])
-      .filter(t => !t.suspended)  // 暂停的租户不出现在公共列表
+      .filter(t => !t.suspended)
       .map(t => ({
-        id: t.id, slug: t.slug, name: t.name
-        // 不暴露 password / is_platform_admin / suspended / created_at
+        id: t.id, slug: t.slug, name: t.name,
+        logo_url: t.logo_url || '',
+        primary_color: t.primary_color || '#4f46e5'
       })),
     magazines: data.magazines
       .filter(m => {
         const t = (data.tenants || []).find(x => x.id === m.tenant_id);
-        return t && !t.suspended;  // 暂停租户的杂志不出现
+        return t && !t.suspended;
       })
       .map(m => ({
         id: m.id, tenant_id: m.tenant_id, name: m.name,
@@ -383,36 +672,44 @@ function snapshotForPublish() {
         const t = (data.tenants || []).find(x => x.id === p.tenant_id);
         return t && !t.suspended;
       })
-      .map(p => ({
-        id: p.id, tenant_id: p.tenant_id, magazine_id: p.magazine_id,
-        page_order: p.page_order, image_path: p.image_path, created_at: p.created_at
-      })),
+      .map(p => ({ id: p.id, tenant_id: p.tenant_id, magazine_id: p.magazine_id, page_order: p.page_order, image_path: p.image_path, created_at: p.created_at })),
     covers: data.covers
       .filter(c => {
         const t = (data.tenants || []).find(x => x.id === c.tenant_id);
         return t && !t.suspended;
       })
-      .map(c => ({
-        id: c.id, tenant_id: c.tenant_id, magazine_id: c.magazine_id,
-        type: c.type, image_path: c.image_path, created_at: c.created_at
-      }))
+      .map(c => ({ id: c.id, tenant_id: c.tenant_id, magazine_id: c.magazine_id, type: c.type, image_path: c.image_path, created_at: c.created_at }))
   };
 }
 
 module.exports = {
   // tenants
   getAllTenants, getTenant, getTenantBySlug, createTenant, updateTenant, setTenantSuspended, deleteTenant,
-  verifyTenantPassword,
+  // users (v4)
+  getAllUsers, getUser, getUserByEmail, createUser, updateUser, setUserPassword, deleteUser, verifyUserPassword,
+  // plans / subs / invoices (v4)
+  getAllPlans, getPlan, getPlanBySlug, createPlan,
+  getActiveSubscription, createSubscription,
+  getInvoices, createInvoice, updateInvoice,
+  getPaymentMethods, createPaymentMethod, deletePaymentMethod,
+  // tokens (v4)
+  createSignupToken, getSignupToken, markSignupTokenUsed,
+  createPasswordResetToken, getPasswordResetToken, markPasswordResetTokenUsed,
+  createUserInvitation, getUserInvitations, getUserInvitationByToken, markUserInvitationAccepted,
+  // email log (v4)
+  logEmail, getEmailLog,
   // audit
   addAuditLog, getAuditLogs,
   // magazines
   getAllMagazines, getMagazine, createMagazine, updateMagazine, deleteMagazine,
-  // pages
   getPages, addPage, addPages, reorderPages, deletePage,
-  // covers
   getAllCovers, createCover, deleteCover,
   // usage
   getTenantUsage,
+  // analytics (v4)
+  addReaderEvent, getReaderStats, getReaderStatsByMagazine,
   // publish
-  snapshotForPublish
+  snapshotForPublish,
+  // utility
+  hashPassword, randomToken
 };

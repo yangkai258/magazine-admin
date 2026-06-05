@@ -679,7 +679,12 @@
       "name": "卓宝人",
       "created_at": "2026-06-05T04:14:22.292Z",
       "is_platform_admin": true,
-      "suspended": false
+      "suspended": false,
+      "logo_url": "",
+      "primary_color": "#4f46e5",
+      "plan_id": 1,
+      "subscription_status": "active",
+      "trial_ends_at": null
     },
     {
       "id": 2,
@@ -688,12 +693,17 @@
       "password": "1",
       "is_platform_admin": false,
       "suspended": false,
-      "created_at": "2026-06-05T08:07:59.286Z"
+      "created_at": "2026-06-05T08:07:59.286Z",
+      "logo_url": "",
+      "primary_color": "#4f46e5",
+      "plan_id": 1,
+      "subscription_status": "active",
+      "trial_ends_at": null
     }
   ],
   "_meta": {
-    "schema_version": 3,
-    "migrated_at": "2026-06-05T07:36:28.814Z"
+    "schema_version": 4,
+    "migrated_at": "2026-06-05T08:54:49.723Z"
   },
   "audit_log": [
     {
@@ -787,6 +797,99 @@
       "details": null,
       "ip": "::ffff:172.16.120.79",
       "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    {
+      "id": 7,
+      "timestamp": "2026-06-05T08:33:30.277Z",
+      "actor_tenant_id": 2,
+      "actor_tenant_slug": "vsfdvs",
+      "actor_is_platform_admin": false,
+      "tenant_id": 2,
+      "action": "logout",
+      "target_type": null,
+      "target_id": null,
+      "details": null,
+      "ip": "::ffff:172.16.120.79",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    {
+      "id": 8,
+      "timestamp": "2026-06-05T08:33:32.718Z",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "tenant_id": 1,
+      "action": "login",
+      "target_type": null,
+      "target_id": null,
+      "details": null,
+      "ip": "::ffff:172.16.120.79",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
     }
-  ]
+  ],
+  "users": [
+    {
+      "id": 1,
+      "tenant_id": 1,
+      "email": "admin@zhuobao.local",
+      "password_hash": "07ed01048b308097d103b34d8d2a49e65e3a426165004faa4f520a8081976e1f",
+      "role": "owner",
+      "name": "卓宝人管理员",
+      "status": "active",
+      "created_at": "2026-06-05T08:54:49.721Z",
+      "last_login_at": null
+    }
+  ],
+  "plans": [
+    {
+      "id": 1,
+      "slug": "free",
+      "name": "免费版",
+      "price_monthly_cny": 0,
+      "features": {
+        "max_magazines": 3,
+        "max_pages_per_magazine": 50,
+        "max_storage_mb": 500,
+        "has_custom_branding": false,
+        "has_analytics": false,
+        "max_users": 1
+      }
+    },
+    {
+      "id": 2,
+      "slug": "pro",
+      "name": "专业版",
+      "price_monthly_cny": 199,
+      "features": {
+        "max_magazines": 30,
+        "max_pages_per_magazine": 200,
+        "max_storage_mb": 5000,
+        "has_custom_branding": true,
+        "has_analytics": true,
+        "max_users": 10
+      }
+    },
+    {
+      "id": 3,
+      "slug": "enterprise",
+      "name": "企业版",
+      "price_monthly_cny": 999,
+      "features": {
+        "max_magazines": -1,
+        "max_pages_per_magazine": -1,
+        "max_storage_mb": 50000,
+        "has_custom_branding": true,
+        "has_analytics": true,
+        "max_users": -1
+      }
+    }
+  ],
+  "subscriptions": [],
+  "invoices": [],
+  "payment_methods": [],
+  "reader_analytics": [],
+  "signup_tokens": [],
+  "password_reset_tokens": [],
+  "email_log": [],
+  "user_invitations": []
 }

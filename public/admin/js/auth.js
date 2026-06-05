@@ -10,6 +10,7 @@
   var LOGIN_URL = '/admin/login.html';
 
   var cachedTenant = null;  // getTenant() 缓存
+  var cachedUser = null;    // getUser() 缓存
 
   function redirectToLogin() {
     // 保留 referrer，登录成功后跳回去
@@ -52,7 +53,8 @@
         })
         .then(function (data) {
           if (data && data.tenant) cachedTenant = data.tenant;
-          return cachedTenant;
+          if (data && data.user) cachedUser = data.user;
+          return { tenant: cachedTenant, user: cachedUser };
         });
     },
 
@@ -69,8 +71,39 @@
         })
         .then(function (data) {
           cachedTenant = data && data.tenant ? data.tenant : null;
+          cachedUser = data && data.user ? data.user : null;
           return cachedTenant;
         });
+    },
+
+    getUser: function () {
+      if (cachedUser) return Promise.resolve(cachedUser);
+      return fetch('/api/auth/me', { credentials: 'same-origin' })
+        .then(function (res) {
+          if (!res.ok) return null;
+          return res.json();
+        })
+        .then(function (data) {
+          cachedUser = data && data.user ? data.user : null;
+          return cachedUser;
+        });
+    },
+
+    // 当前用户角色（owner/editor/viewer/null）
+    getRole: function () {
+      if (cachedUser) return Promise.resolve(cachedUser.role);
+      return this.getUser().then(function (u) { return u && u.role; });
+    },
+
+    // 当前用户是否是 owner（能改品牌/邀请/计费等）
+    isOwner: function () {
+      return this.getRole().then(function (r) { return r === 'owner'; });
+    },
+
+    // 当前用户是否是平台管理员
+    isPlatformAdmin: function () {
+      if (cachedTenant) return Promise.resolve(!!cachedTenant.is_platform_admin);
+      return this.getTenant().then(function (t) { return t && !!t.is_platform_admin; });
     },
 
     /**

@@ -137,29 +137,43 @@
         <div class="login-error" id="loginError"></div>
 
         <form class="login-form" id="loginForm" autocomplete="off">
-          <div class="form-group">
-            <label for="slug">租户标识</label>
-            <input
-              type="text"
-              id="slug"
-              name="slug"
-              value="zhuobao"
-              autocomplete="username"
-              autocapitalize="off"
-              spellcheck="false"
-              required
-              placeholder="如 zhuobao / company2"
-            >
-            <div class="form-hint">不知道？问平台管理员，或者看「平台管理 → 租户列表」</div>
+          <div class="form-row" style="display:flex;gap:10px">
+            <div class="form-group" style="flex:0 0 130px">
+              <label for="slug">租户</label>
+              <input
+                type="text"
+                id="slug"
+                name="slug"
+                value="zhuobao"
+                autocomplete="organization"
+                autocapitalize="off"
+                spellcheck="false"
+                required
+                placeholder="zhuobao"
+              >
+            </div>
+            <div class="form-group" style="flex:1">
+              <label for="email">邮箱</label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                autocomplete="username"
+                autocapitalize="off"
+                spellcheck="false"
+                required
+                placeholder="you@example.com"
+              >
+            </div>
           </div>
-
           <div class="form-group">
             <label for="password">密码</label>
             <input
               type="password"
               id="password"
               name="password"
-              placeholder="请输入管理员密码"
+              autocomplete="current-password"
+              placeholder="请输入密码"
               required
               autofocus
             >
@@ -168,7 +182,12 @@
           <button type="submit" class="login-submit" id="loginSubmit">登 录</button>
         </form>
 
-        <p class="login-foot">© 杂志管理平台 · Session-based 鉴权</p>
+        <p class="login-foot">
+          <a href="#" id="forgotLink" style="color:var(--primary);text-decoration:none">忘记密码？</a>
+          &nbsp;·&nbsp;
+          <a href="/admin/signup.html" style="color:var(--primary);text-decoration:none">自助注册</a>
+        </p>
+        <p class="login-foot" style="margin-top:14px;font-size:11px;color:#9ca3af">© 杂志管理平台 · Session-based 鉴权 · 用户级 + 角色控制</p>
       </div>
     </div>
   </div>
@@ -221,14 +240,39 @@
 
       pwdInput.addEventListener('input', clearError);
 
+      // 忘记密码链接
+      document.getElementById('forgotLink').addEventListener('click', function (ev) {
+        ev.preventDefault();
+        var slug = (slugInput.value || '').trim();
+        if (!slug) { showError('先填租户标识，再点忘记密码'); return; }
+        var email = prompt('输入你的邮箱（租户：' + slug + '）：');
+        if (!email) return;
+        fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ slug: slug, email: email })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.success) {
+            showError('✅ 重置链接已发到 ' + email + '，请查收（链接 1 小时内有效）');
+          } else {
+            showError('发送失败：' + (data.error || 'unknown'));
+          }
+        });
+      });
+
       form.addEventListener('submit', function (ev) {
         ev.preventDefault();
         clearError();
 
         var slug = (slugInput.value || '').trim();
+        var email = (document.getElementById('email').value || '').trim();
         var password = pwdInput.value || '';
 
         if (!slug) { showError('租户标识不能为空'); return; }
+        if (!email) { showError('邮箱不能为空'); return; }
         if (!password) { showError('请输入密码'); return; }
 
         submitBtn.disabled = true;
@@ -239,7 +283,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ slug: slug, password: password })
+          body: JSON.stringify({ slug: slug, email: email, password: password })
         })
           .then(function (res) {
             return res.json().then(function (body) {
