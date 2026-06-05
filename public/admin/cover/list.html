@@ -6,6 +6,7 @@
   <title>封面管理</title>
   <link rel="stylesheet" href="/admin/css/style.css">
   <script src="/admin/js/auth.js"></script>
+  <script src="/admin/js/nav.js"></script>
   <style>
     .cover-spec {
       background: linear-gradient(135deg, #f0f7ff 0%, #e8f4ff 100%);
@@ -48,23 +49,7 @@
   <div class="admin-layout">
     <aside class="sidebar">
       <div class="sidebar-logo">📚 杂志管理平台</div>
-      <nav class="sidebar-nav">
-        <a href="/" class="nav-item"><span class="nav-icon">📊</span> 总览</a>
-        <a href="/admin/magazine/list.html" class="nav-item"><span class="nav-icon">📖</span> 杂志管理</a>
-        <a href="/admin/cover/list.html" class="nav-item active"><span class="nav-icon">🖼</span> 封面管理</a>
-        <a href="/admin/platform.html" class="nav-item platform-only" data-page="platform" style="display:none">
-          <span class="nav-icon">🏢</span> 平台管理
-        </a>
-        <a href="/admin/audit.html" class="nav-item platform-only" data-page="audit" style="display:none">
-          <span class="nav-icon">📋</span> 审计日志
-        </a>
-        <a href="/admin/email-log.html" class="nav-item platform-only" data-page="email-log" style="display:none">
-          <span class="nav-icon">📧</span> 邮件日志
-        </a>
-        <a href="/admin/tenant-users.html" class="nav-item owner-only" data-page="tenant-users" style="display:none">
-          <span class="nav-icon">👥</span> 用户管理
-        </a>
-      </nav>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
     </aside>
     <main class="main-content">
       <header class="top-bar"><h1 class="page-title">封面管理</h1><button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button></header>
@@ -103,13 +88,9 @@
 
   <script src="/admin/js/api.js"></script>
   <script>
-    // 平台管理员才显示「平台管理」「审计日志」菜单；owner 显示「用户管理」
-    MAG_AUTH.getTenant().then(function(t) {
-      if (t && t.is_platform_admin) {
-        document.querySelectorAll('.platform-only').forEach(function(el) { el.style.display = ''; });
-      }
-    });
-    MAG_AUTH.getUser().then(function(u) {
+    // 渲染侧边栏 nav（统一从 nav.js 拿 10 项，按角色过滤）
+    MAG_NAV.render('cover').then(function (ctx) {
+      var u = ctx && ctx.user;
       if (u && u.role === 'owner') {
         // 显示上传按钮
         var uploadBtn = document.getElementById('uploadBtn');

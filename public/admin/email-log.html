@@ -6,6 +6,7 @@
   <title>邮件发送日志</title>
   <link rel="stylesheet" href="/admin/css/style.css">
   <script src="/admin/js/auth.js"></script>
+  <script src="/admin/js/nav.js"></script>
   <style>
     /* 顶部说明卡片 */
     .email-notice {
@@ -142,29 +143,7 @@
   <div class="admin-layout">
     <aside class="sidebar">
       <div class="sidebar-logo">📚 杂志管理平台</div>
-      <nav class="sidebar-nav">
-        <a href="/admin/" class="nav-item" data-page="dashboard">
-          <span class="nav-icon">📊</span> 总览
-        </a>
-        <a href="/admin/magazine/list.html" class="nav-item" data-page="magazine">
-          <span class="nav-icon">📖</span> 杂志管理
-        </a>
-        <a href="/admin/cover/list.html" class="nav-item" data-page="cover">
-          <span class="nav-icon">🖼</span> 封面管理
-        </a>
-        <a href="/admin/tenant-users.html" class="nav-item owner-only" data-page="tenant-users" style="display:none">
-          <span class="nav-icon">👥</span> 用户管理
-        </a>
-        <a href="/admin/platform.html" class="nav-item platform-only" data-page="platform" style="display:none">
-          <span class="nav-icon">🏢</span> 平台管理
-        </a>
-        <a href="/admin/audit.html" class="nav-item platform-only" data-page="audit" style="display:none">
-          <span class="nav-icon">📋</span> 审计日志
-        </a>
-        <a href="/admin/email-log.html" class="nav-item platform-only active" data-page="email-log" style="display:none">
-          <span class="nav-icon">📧</span> 邮件日志
-        </a>
-      </nav>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
     </aside>
     <main class="main-content">
       <header class="top-bar">
@@ -400,18 +379,14 @@
 
     // ========== 启动 ==========
     (async function init() {
+      // 渲染侧边栏 nav（统一从 nav.js 拿 10 项，按角色过滤）
+      await MAG_NAV.render('email-log');
       const t = await MAG_AUTH.getTenant();
       if (!t) return;  // requireAuth 已跳走
 
-      // 显隐侧边栏菜单
+      // 注：nav 的 role-based 显隐已统一由 nav.js 处理
       if (t.is_platform_admin) {
         state.isPlatformAdmin = true;
-        document.querySelectorAll('.platform-only').forEach(function (el) { el.style.display = ''; });
-      }
-      // owner-only 菜单（用户管理）：通过 getRole 决定
-      const u = await MAG_AUTH.getUser();
-      if (u && u.role === 'owner') {
-        document.querySelectorAll('.owner-only').forEach(function (el) { el.style.display = ''; });
       }
 
       if (!t.is_platform_admin) {

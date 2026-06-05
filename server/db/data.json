@@ -680,8 +680,8 @@
       "created_at": "2026-06-05T04:14:22.292Z",
       "is_platform_admin": true,
       "suspended": false,
-      "logo_url": "",
-      "primary_color": "#4f46e5",
+      "logo_url": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/logos/1780657682649-490552250.jpg",
+      "primary_color": "#2563eb",
       "plan_id": 1,
       "subscription_status": "active",
       "trial_ends_at": null
@@ -825,6 +825,60 @@
       "details": null,
       "ip": "::ffff:172.16.120.79",
       "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    {
+      "id": 9,
+      "timestamp": "2026-06-05T11:05:57.720Z",
+      "actor_user_id": 1,
+      "actor_user_email": "admin@zhuobao.local",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "actor_role": "owner",
+      "tenant_id": 1,
+      "action": "login",
+      "target_type": null,
+      "target_id": null,
+      "details": null,
+      "ip": "::1",
+      "user_agent": "curl/8.19.0"
+    },
+    {
+      "id": 10,
+      "timestamp": "2026-06-05T11:07:07.082Z",
+      "actor_user_id": 1,
+      "actor_user_email": "admin@zhuobao.local",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "actor_role": "owner",
+      "tenant_id": 1,
+      "action": "login",
+      "target_type": null,
+      "target_id": null,
+      "details": null,
+      "ip": "::1",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    {
+      "id": 11,
+      "timestamp": "2026-06-05T11:08:03.136Z",
+      "actor_user_id": 1,
+      "actor_user_email": "admin@zhuobao.local",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "actor_role": "owner",
+      "tenant_id": 1,
+      "action": "update_branding",
+      "target_type": null,
+      "target_id": null,
+      "details": {
+        "has_logo": true,
+        "primary_color": "#2563eb"
+      },
+      "ip": "::1",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
     }
   ],
   "users": [
@@ -837,7 +891,7 @@
       "name": "卓宝人管理员",
       "status": "active",
       "created_at": "2026-06-05T08:54:49.721Z",
-      "last_login_at": null
+      "last_login_at": "2026-06-05T11:07:07.080Z"
     }
   ],
   "plans": [
@@ -887,7 +941,99 @@
   "subscriptions": [],
   "invoices": [],
   "payment_methods": [],
-  "reader_analytics": [],
+  "reader_analytics": [
+    {
+      "id": 1,
+      "tenant_id": 1,
+      "magazine_id": null,
+      "page_id": null,
+      "viewer_id": "8beee132-4621-4bce-97a9-34451f841d1e",
+      "event_type": "view",
+      "page_number": null,
+      "duration_ms": null,
+      "referrer": "http://localhost:50100/splash.html",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "ts": "2026-06-05T11:05:21.490Z"
+    },
+    {
+      "id": 2,
+      "tenant_id": 1,
+      "magazine_id": 1,
+      "page_id": null,
+      "viewer_id": "8beee132-4621-4bce-97a9-34451f841d1e",
+      "event_type": "view",
+      "page_number": null,
+      "duration_ms": null,
+      "referrer": "http://localhost:50100/directory.html?t=zhuobao",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "ts": "2026-06-05T11:05:29.249Z"
+    },
+    {
+      "id": 3,
+      "tenant_id": 1,
+      "magazine_id": 1,
+      "page_id": null,
+      "viewer_id": "8beee132-4621-4bce-97a9-34451f841d1e",
+      "event_type": "view",
+      "page_number": 1,
+      "duration_ms": null,
+      "referrer": "http://localhost:50100/reader/viewer.html?id=1&t=zhuobao",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "ts": "2026-06-05T11:05:29.363Z"
+    },
+    {
+      "id": 4,
+      "tenant_id": 1,
+      "magazine_id": 1,
+      "page_id": null,
+      "viewer_id": "8beee132-4621-4bce-97a9-34451f841d1e",
+      "event_type": "view",
+      "page_number": 1,
+      "duration_ms": null,
+      "referrer": "http://localhost:50100/reader/viewer.html?id=1&t=zhuobao",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "ts": "2026-06-05T11:05:29.367Z"
+    },
+    {
+      "id": 5,
+      "tenant_id": 1,
+      "magazine_id": 1,
+      "page_id": null,
+      "viewer_id": "8beee132-4621-4bce-97a9-34451f841d1e",
+      "event_type": "dwell",
+      "page_number": null,
+      "duration_ms": 2422,
+      "referrer": "http://localhost:50100/reader/viewer.html?id=1&t=zhuobao",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "ts": "2026-06-05T11:05:31.770Z"
+    },
+    {
+      "id": 6,
+      "tenant_id": 1,
+      "magazine_id": 1,
+      "page_id": null,
+      "viewer_id": "8beee132-4621-4bce-97a9-34451f841d1e",
+      "event_type": "dwell",
+      "page_number": null,
+      "duration_ms": 2424,
+      "referrer": "http://localhost:50100/reader/viewer.html?id=1&t=zhuobao",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "ts": "2026-06-05T11:05:31.775Z"
+    },
+    {
+      "id": 7,
+      "tenant_id": 1,
+      "magazine_id": 1,
+      "page_id": null,
+      "viewer_id": "8beee132-4621-4bce-97a9-34451f841d1e",
+      "event_type": "view",
+      "page_number": 2,
+      "duration_ms": null,
+      "referrer": "http://localhost:50100/reader/viewer.html?id=1&t=zhuobao",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+      "ts": "2026-06-05T11:05:31.807Z"
+    }
+  ],
   "signup_tokens": [],
   "password_reset_tokens": [],
   "email_log": [],
