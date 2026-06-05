@@ -9,7 +9,10 @@
 - **后端**: Express.js + JSON 文件存储（零依赖，SQLite因编译问题改用JSON）
 - **前端**: 原生 HTML/CSS/JS，无框架依赖
 - **文件存储**: 本地 `public/uploads/` 目录（或映射到 OSS）
-- **端口**: 后端 3001
+- **端口**:
+  - 公共阅读端（`server/public.js`）：**3010** —— splash → directory → reader（3001 已被别的后台占着，挤不进去）
+  - 管理后台（`server/admin.js`）：**3030** —— `/admin/` 全部 CRUD + 上传
+  - 共享同一份 `db/data.json`
 
 ## 数据模型（JSON文件存储）
 
@@ -63,7 +66,7 @@
   - **批量上传**：一次传多张
   - **拖拽排序**：直接拖拽调整顺序，自动保存
 
-### 3. API 接口
+### 3. 管理端 API
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -80,6 +83,21 @@
 | GET | /api/covers | 封面列表 |
 | DELETE | /api/covers/:id | 删除封面 |
 
+### 4. 公共读 API（前台用，永远只返回 enabled=1）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | /api/public/magazines | 已启用的杂志列表 |
+| GET | /api/public/magazines/:id | 已启用单本杂志详情+页面列表（404 if 未启用） |
+
+## 三层公共阅读体验（封面 → 目录 → 内容）
+
+| 入口 | 页面 | 说明 |
+|------|------|------|
+| 开屏 | `public/splash.html` | 3s 自动跳，logo + 标题 + 分割线依次淡入；点屏幕或"点击跳过"按钮立即跳目录 |
+| 目录 | `public/directory.html` | 卡片列表，动态拉 `/api/magazines?enabled=1` |
+| 阅读 | `public/reader/viewer.html?id=X` | 桌面双页翻书（turn.js），首末页单图、中间页 left+right spread；移动端单页横滑+双指缩放；首页图片预加载防闪白 |
+
 ## 项目结构
 
 ```
@@ -89,18 +107,23 @@ magazine-admin/
 ├── README.md
 ├── SPEC.md
 ├── server/
-│   ├── index.js          # Express 服务
+│   ├── index.js          # Express 服务（管理 + 公共读 两套端点）
 │   └── db/
-│       └── init.js       # JSON存储 + 数据操作
+│       ├── data.json     # JSON 持久化（gitignore）
+│       └── init.js       # 数据操作
 ├── public/
-│   ├── index.html        # 总览首页
-│   ├── css/style.css     # 全局样式
-│   ├── js/api.js         # API调用封装
-│   ├── magazine/
-│   │   ├── list.html     # 杂志列表
-│   │   └── edit.html     # 杂志详情+页面管理
-│   └── cover/
-│       └── list.html     # 封面管理
+│   ├── splash.html       # 开屏（公共）
+│   ├── directory.html    # 杂志目录（公共）
+│   ├── images/           # logo 等
+│   ├── reader/           # 公共阅读器
+│   │   ├── viewer.html   # 动态翻页（响应 ?id=）
+│   │   └── lib/          # jquery.min.js / turn.min.js
+│   └── admin/            # 后台管理 UI
+│       ├── index.html    # 总览
+│       ├── css/style.css
+│       ├── js/api.js
+│       ├── magazine/     # 杂志管理
+│       └── cover/        # 封面管理
 └── uploads/              # 上传文件目录（gitignore）
 ```
 
@@ -112,5 +135,7 @@ magazine-admin/
 cd magazine-admin
 npm install
 npm start
-# 访问 http://localhost:3001
+# 同时启动两端：
+#   公共阅读端 http://localhost:3010
+#   管理后台   http://localhost:3030
 ```

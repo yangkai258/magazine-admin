@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>封面管理</title>
+  <link rel="stylesheet" href="/admin/css/style.css">
+  <style>
+    .cover-spec {
+      background: linear-gradient(135deg, #f0f7ff 0%, #e8f4ff 100%);
+      border: 1px solid #b6dfff;
+      border-left: 4px solid #1890ff;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 16px;
+      font-size: 13px;
+      color: #333;
+      flex-wrap: wrap;
+    }
+    .cover-spec-icon { font-size: 28px; flex-shrink: 0; }
+    .cover-spec-body { flex: 1; min-width: 0; }
+    .cover-spec-title { font-weight: 600; font-size: 14px; color: #1890ff; margin-bottom: 4px; }
+    .cover-spec-dims { color: #555; margin-bottom: 2px; }
+    .cover-spec-aspect { color: #888; font-size: 12px; }
+    .cover-spec-aspect b { color: #1890ff; }
+    .cover-spec-warning {
+      background: #fff7e6;
+      border: 1px solid #ffd591;
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #d46b08;
+      margin-top: 6px;
+      display: none;
+    }
+    .cover-spec-warning.show { display: block; }
+    .cover-spec-aspect small { color: #aaa; margin-left: 6px; }
+
+    /* 当前选中 tab 的高亮 */
+    .tabs .tab { transition: all 0.2s; }
+    .tabs .tab.active { box-shadow: 0 2px 8px rgba(24,144,255,0.3); }
+  </style>
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav">
+        <a href="/" class="nav-item"><span class="nav-icon">📊</span> 总览</a>
+        <a href="/admin/magazine/list.html" class="nav-item"><span class="nav-icon">📖</span> 杂志管理</a>
+        <a href="/admin/cover/list.html" class="nav-item active"><span class="nav-icon">🖼</span> 封面管理</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar"><h1 class="page-title">封面管理</h1></header>
+      <div class="content-area">
+        <div class="tabs">
+          <button class="tab active" data-type="pc">🖥 PC端封面</button>
+          <button class="tab" data-type="mobile">📱 移动端封面</button>
+        </div>
+
+        <!-- 尺寸规格说明，随当前 tab 变化 -->
+        <div class="cover-spec" id="coverSpec">
+          <div class="cover-spec-icon" id="specIcon">🖥</div>
+          <div class="cover-spec-body">
+            <div class="cover-spec-title" id="specTitle">PC 端封面规格</div>
+            <div class="cover-spec-dims" id="specDims">推荐尺寸：<b>1920 × 1080</b> 像素（也支持 1920×600 等横幅比例）</div>
+            <div class="cover-spec-aspect" id="specAspect">宽高比：<b>16 : 9</b>（横屏） <small>· 单文件 ≤ 5MB · JPG/PNG/WebP</small></div>
+            <div class="cover-spec-warning" id="specWarning"></div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap">
+          <select id="magazineSelect" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;min-width:180px">
+            <option value="">全部杂志</option>
+          </select>
+          <button class="btn btn-primary btn-sm" id="uploadBtn">+ 上传封面</button>
+          <input type="file" id="coverFileInput" accept="image/*" style="display:none">
+        </div>
+        <div class="cover-grid" id="coverGrid"></div>
+        <div class="empty-state" id="emptyState" style="display:none">
+          <div class="empty-icon">🖼</div>
+          <p>还没有封面，点「上传封面」开始</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/admin/js/api.js"></script>
+  <script>
+    let currentType = 'pc';
+    let magazines = [];
+    let allCovers = [];
+
+    // 不同 tab 的尺寸规格
+    const COVER_SPECS = {
+      pc: {
+        icon: '🖥',
+        title: 'PC 端封面规格',
+        dims: '推荐尺寸：<b>1920 × 1080</b> 像素（也支持 1920×600 / 2560×1440 等横幅比例）',
+        aspect: '宽高比：<b>16 : 9</b>（横屏）',
+        ratio: 16 / 9,
+        ratioLabel: '16:9',
+        maxMB: 5
+      },
+      mobile: {
+        icon: '📱',
+        title: '移动端封面规格',
+        dims: '推荐尺寸：<b>1080 × 1920</b> 像素（也支持 750×1334 / 1242×2208 等竖屏比例）',
+        aspect: '宽高比：<b>9 : 16</b>（竖屏）',
+        ratio: 9 / 16,
+        ratioLabel: '9:16',
+        maxMB: 5
+      }
+    };
+
+    function updateSpec(type) {
+      var s = COVER_SPECS[type];
+      document.getElementById('specIcon').textContent = s.icon;
+      document.getElementById('specTitle').textContent = s.title;
+      document.getElementById('specDims').innerHTML = s.dims;
+      document.getElementById('specAspect').innerHTML = s.aspect +
+        ' <small>· 单文件 ≤ ' + s.maxMB + 'MB · JPG/PNG/WebP</small>';
+      var w = document.getElementById('specWarning');
+      w.classList.remove('show');
+      w.textContent = '';
+    }
+
+    async function load() {
+      [magazines, allCovers] = await Promise.all([
+        api.get('/magazines'),
+        api.get('/covers')
+      ]);
+      const select = document.getElementById('magazineSelect');
+      select.innerHTML = '<option value="">全部杂志</option>' +
+        magazines.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+      render();
+    }
+
+    function render() {
+      const filterMagazine = document.getElementById('magazineSelect').value;
+      const covers = allCovers.filter(c => {
+        if (c.type !== currentType) return false;
+        if (filterMagazine && c.magazine_id != filterMagazine) return false;
+        return true;
+      });
+
+      const grid = document.getElementById('coverGrid');
+      const empty = document.getElementById('emptyState');
+      if (covers.length === 0) {
+        grid.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+
+      grid.innerHTML = covers.map(c => {
+        const magazine = magazines.find(m => m.id == c.magazine_id);
+        return `
+          <div class="cover-card" data-id="${c.id}">
+            <img src="${coverImg(c.image_path)}" class="cover-card-img" onerror="this.style.display='none'">
+            <div class="cover-card-body">
+              <div style="font-size:13px;font-weight:500">${magazine ? magazine.name : '通用封面'}</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${c.type === 'pc' ? '🖥 PC端' : '📱 移动端'}</div>
+              <div class="cover-card-meta">
+                <span class="cover-type-badge ${c.type === 'mobile' ? 'mobile' : ''}">${c.type === 'pc' ? 'PC' : 'Mobile'}</span>
+                <button class="btn btn-xs btn-danger" onclick="deleteCover(${c.id})">删除</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function deleteCover(id) {
+      if (!confirm('确认删除该封面？')) return;
+      await api.del('/covers/' + id);
+      toast('删除成功', 'success');
+      allCovers = allCovers.filter(c => c.id !== id);
+      render();
+    }
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentType = tab.dataset.type;
+        updateSpec(currentType);
+        render();
+      });
+    });
+
+    document.getElementById('magazineSelect').addEventListener('change', render);
+
+    document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('coverFileInput').click());
+
+    // 上传时做尺寸校验
+    document.getElementById('coverFileInput').addEventListener('change', async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const spec = COVER_SPECS[currentType];
+
+      // 1. 文件大小校验
+      if (file.size > spec.maxMB * 1024 * 1024) {
+        if (!confirm('文件大小 ' + (file.size / 1024 / 1024).toFixed(1) + 'MB 超过推荐 ' + spec.maxMB + 'MB，仍要上传吗？')) {
+          e.target.value = '';
+          return;
+        }
+      }
+
+      // 2. 像素尺寸校验（不阻塞，只警告）
+      var dimOK = await new Promise(function(resolve) {
+        var img = new Image();
+        img.onload = function() {
+          var w = $w = img.naturalWidth, h = img.naturalHeight;
+          var ratio = w / h;
+          var expected = spec.ratio;
+          var diff = Math.abs(ratio - expected) / expected;
+          // 允许 ±20% 比例偏差（兼容横向/竖向的微调）
+          var ok = diff <= 0.2;
+          resolve({ ok: ok, w: w, h: h, ratio: ratio, expected: expected, diff: diff });
+        };
+        img.onerror = function() { resolve({ ok: null }); };
+        img.src = URL.createObjectURL(file);
+      });
+
+      var warn = document.getElementById('specWarning');
+      if (dimOK.ok === false) {
+        var msg = '⚠ 尺寸 ' + dimOK.w + ' × ' + dimOK.h +
+                  ' (宽高比 ' + (dimOK.w / dimOK.h).toFixed(2) +
+                  ':1) 跟推荐 ' + spec.ratioLabel + ' 偏差 ' + (dimOK.diff * 100).toFixed(0) + '%，可能铺满效果不佳';
+        warn.textContent = msg;
+        warn.classList.add('show');
+        toast('尺寸不匹配，已提示。继续上传将无视此警告。', 'error');
+      } else if (dimOK.ok === true) {
+        warn.classList.remove('show');
+      } else {
+        warn.textContent = '⚠ 无法读取图片尺寸';
+        warn.classList.add('show');
+      }
+
+      var magazine_id = document.getElementById('magazineSelect').value;
+      var fd = new FormData();
+      fd.append('image', file);
+      fd.append('type', currentType);
+      if (magazine_id) fd.append('magazine_id', magazine_id);
+      try {
+        const cover = await api.post('/covers/upload', fd, true);
+        allCovers.unshift(cover);
+        render();
+        toast('上传成功', 'success');
+        warn.classList.remove('show');
+      } catch (err) { toast(err.message, 'error'); }
+      e.target.value = '';
+    });
+
+    // 初始显示 PC 规格
+    updateSpec('pc');
+    load();
+  </script>
+</body>
+</html>

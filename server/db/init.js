@@ -11,6 +11,18 @@ const defaultData = {
 
 let data = loadData();
 
+// 热重载：data.json 被外部修改后自动重新加载（无需重启服务）
+// 这样后台改完数据前台立刻能看到，不用每次都重启 node
+try {
+  fs.watchFile(dataPath, { interval: 1000 }, (curr, prev) => {
+    if (curr.mtimeMs === prev.mtimeMs) return;
+    console.log('[db] data.json changed, reloading...');
+    data = loadData();
+  });
+} catch (e) {
+  console.error('[db] watchFile failed:', e.message);
+}
+
 function loadData() {
   try {
     if (fs.existsSync(dataPath)) {

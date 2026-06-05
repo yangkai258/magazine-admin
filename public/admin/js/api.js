@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = '/api';  // 同源，admin 跑在 3030，浏览器自动拼成 http://localhost:3030/api
 
 const api = {
   async get(path) {
@@ -52,5 +52,5 @@ function formatDate(str) {
 
 function coverImg(src) {
   if (!src) return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="50" fill="%23ddd"><rect width="80" height="50"/></svg>';
-  return src.startsWith('http') ? src : 'http://localhost:3001' + src;
+  return src;  // 同源，相对路径如 /uploads/xxx.png 浏览器自动拼当前 origin
 }

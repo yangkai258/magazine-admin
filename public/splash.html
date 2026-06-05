@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>卓宝电子刊</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #1a1a1a; overflow: hidden; }
+    .splash {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: #1a1a1a;
+      z-index: 1000;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    /* 封面作为主视觉 */
+    .splash-cover {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      object-position: center;
+      opacity: 0;
+      transition: opacity 0.8s ease-out;
+    }
+    .splash-cover.show { opacity: 1; }
+    /* 底部信息条：logo + 标题 */
+    .splash-info {
+      position: absolute;
+      left: 50%; bottom: 60px;
+      transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center;
+      z-index: 2;
+    }
+    .splash-logo {
+      width: 56px; height: 56px;
+      object-fit: contain;
+      opacity: 0;
+      transform: scale(0.85);
+      transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
+    }
+    .splash-logo.show { opacity: 1; transform: scale(1); }
+    .splash-title {
+      margin-top: 12px;
+      color: #fff;
+      font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: 6px;
+      opacity: 0;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+      transition: opacity 0.5s 0.4s;
+    }
+    .splash-title.show { opacity: 1; }
+    .splash-line {
+      margin-top: 8px;
+      width: 30px; height: 1.5px;
+      background: rgba(255,255,255,0.6);
+      opacity: 0;
+      transition: opacity 0.5s 0.6s;
+    }
+    .splash-line.show { opacity: 1; }
+    .splash-skip {
+      position: fixed; bottom: 24px;
+      left: 50%; transform: translateX(-50%);
+      font-size: 12px;
+      color: rgba(255,255,255,0.7);
+      font-family: 'PingFang SC', sans-serif;
+      letter-spacing: 1px;
+      opacity: 0;
+      transition: opacity 0.5s 1s;
+      cursor: pointer;
+      z-index: 3;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    }
+    .splash-skip.show { opacity: 1; }
+    /* 移动端：底部条上移 */
+    @media (max-width: 768px) {
+      .splash-info { bottom: 72px; }
+      .splash-logo { width: 44px; height: 44px; }
+      .splash-title { font-size: 15px; letter-spacing: 4px; }
+    }
+  </style>
+</head>
+<body>
+<div class="splash" id="splash">
+  <img class="splash-cover" id="cover" alt="">
+  <div class="splash-info">
+    <img class="splash-logo" id="logo" src="images/logo.png" alt="logo">
+    <div class="splash-title" id="title">卓宝电子刊</div>
+    <div class="splash-line" id="line"></div>
+  </div>
+</div>
+<div class="splash-skip" id="skip">点击跳过</div>
+
+<script>
+(function() {
+  var timer = setTimeout(goDirectory, 3000);
+
+  function goDirectory() {
+    clearTimeout(timer);
+    location.href = 'directory.html';
+  }
+
+  document.getElementById('splash').addEventListener('click', goDirectory);
+  document.getElementById('skip').addEventListener('click', function(e) {
+    e.stopPropagation();
+    goDirectory();
+  });
+
+  // 探测设备类型：UA 优先，screen width 兜底
+  function detectDeviceType() {
+    var ua = navigator.userAgent || '';
+    if (/Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+      return 'mobile';
+    }
+    // 兜底：viewport 窄的当 mobile
+    if (window.innerWidth <= 768) return 'mobile';
+    return 'pc';
+  }
+
+  // 拉取封面（PC/Mobile 区分），失败时降级到 logo 主视觉
+  // 端口回退：先打同源，失败再试各候选端口（旧的 3010/3011/3030/3031 上没这个端点）
+  function loadCover() {
+    var type = detectDeviceType();
+    var candidates = [
+      '',
+      'http://localhost:3012',
+      'http://localhost:3032',
+      'http://localhost:3011',
+      'http://localhost:3031'
+    ];
+    function tryOne(i) {
+      if (i >= candidates.length) throw new Error('no cover for ' + type + ' on any port');
+      var base = candidates[i];
+      var url = base + '/api/public/cover?type=' + type;
+      return fetch(url).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' at ' + url);
+        return r.json();
+      }).catch(function(e) {
+        console.warn('[splash] ' + url + ' failed: ' + e.message + ', trying next');
+        return tryOne(i + 1);
+      });
+    }
+    return tryOne(0)
+      .then(function(cover) {
+        var $cover = document.getElementById('cover');
+        // 补全绝对 URL：如果是相对路径 /uploads/xxx，加上当前 base
+        var src = cover.image_path;
+        if (src.startsWith('/') && candidates.length > 0) {
+          // 同源路径直接用（同源时浏览器自动拼），跨 base 时拼绝对 URL
+          var triedBase = candidates.find(function(b) { return cover._fromBase === b; }) || '';
+          src = triedBase + src;
+        }
+        $cover.src = src;
+        if ($cover.complete && $cover.naturalWidth > 0) {
+          $cover.classList.add('show');
+        } else {
+          $cover.onload = function() { $cover.classList.add('show'); };
+        }
+      })
+      .catch(function(err) {
+        console.warn('[splash] 全部端口都没拉到封面:', err.message, '— 降级到 logo');
+        var $logo = document.getElementById('logo');
+        $logo.style.width = '180px';
+        $logo.style.height = '180px';
+        $logo.style.filter = 'invert(1) drop-shadow(0 2px 8px rgba(0,0,0,0.3))';
+        document.querySelector('.splash').style.background = '#2a2a2a';
+      });
+  }
+
+  // 启动：拉封面 + 动画
+  window.addEventListener('load', function() {
+    loadCover();
+    setTimeout(function() { document.getElementById('logo').classList.add('show'); }, 100);
+    setTimeout(function() { document.getElementById('title').classList.add('show'); }, 400);
+    setTimeout(function() { document.getElementById('line').classList.add('show'); }, 600);
+    setTimeout(function() { document.getElementById('skip').classList.add('show'); }, 800);
+  });
+})();
+</script>
+</body>
+</html>

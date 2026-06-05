@@ -4,20 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>杂志管理平台</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/admin/css/style.css">
 </head>
 <body>
   <div class="admin-layout">
     <aside class="sidebar">
       <div class="sidebar-logo">📚 杂志管理平台</div>
       <nav class="sidebar-nav">
-        <a href="/" class="nav-item active" data-page="dashboard">
+        <a href="/admin/" class="nav-item active" data-page="dashboard">
           <span class="nav-icon">📊</span> 总览
         </a>
-        <a href="/magazine/list.html" class="nav-item" data-page="magazine">
+        <a href="/admin/magazine/list.html" class="nav-item" data-page="magazine">
           <span class="nav-icon">📖</span> 杂志管理
         </a>
-        <a href="/cover/list.html" class="nav-item" data-page="cover">
+        <a href="/admin/cover/list.html" class="nav-item" data-page="cover">
           <span class="nav-icon">🖼</span> 封面管理
         </a>
       </nav>
@@ -39,7 +39,7 @@
             <div class="dash-card-icon">✅</div>
             <div class="dash-card-info">
               <div class="dash-card-num" id="totalEnabled">--</div>
-              <div class="dash-card-label">启用中</div>
+              <div class="dash-card-label">启用数</div>
             </div>
           </div>
           <div class="dash-card">
@@ -60,22 +60,26 @@
       </div>
     </main>
   </div>
-  <script src="/js/api.js"></script>
+  <script src="/admin/js/api.js"></script>
   <script>
     (async function() {
-      const [magazines, covers] = await Promise.all([
-        api.get('/magazines'),
-        api.get('/covers')
-      ]);
-      document.getElementById('totalMagazines').textContent = magazines.length;
-      document.getElementById('totalEnabled').textContent = magazines.filter(m => m.enabled).length;
-      document.getElementById('totalCovers').textContent = covers.length;
-      let pageCount = 0;
-      for (const m of magazines) {
-        const detail = await api.get('/magazines/' + m.id);
-        pageCount += (detail.pages || []).length;
+      try {
+        const [magazines, covers] = await Promise.all([
+          api.get('/magazines'),
+          api.get('/covers')
+        ]);
+        document.getElementById('totalMagazines').textContent = magazines.length;
+        document.getElementById('totalEnabled').textContent = magazines.filter(m => m.enabled).length;
+        document.getElementById('totalCovers').textContent = covers.length;
+        let pageCount = 0;
+        for (const m of magazines) {
+          const detail = await api.get('/magazines/' + m.id);
+          pageCount += (detail.pages || []).length;
+        }
+        document.getElementById('totalPages').textContent = pageCount;
+      } catch(e) {
+        document.getElementById('contentArea').innerHTML = '<div style="padding:40px;color:#e53935">加载失败：' + e.message + '</div>';
       }
-      document.getElementById('totalPages').textContent = pageCount;
     })();
   </script>
 </body>

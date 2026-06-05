@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>杂志管理</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/admin/css/style.css">
 </head>
 <body>
   <div class="admin-layout">
@@ -12,8 +12,8 @@
       <div class="sidebar-logo">📚 杂志管理平台</div>
       <nav class="sidebar-nav">
         <a href="/" class="nav-item"><span class="nav-icon">📊</span> 总览</a>
-        <a href="/magazine/list.html" class="nav-item active"><span class="nav-icon">📖</span> 杂志管理</a>
-        <a href="/cover/list.html" class="nav-item"><span class="nav-icon">🖼</span> 封面管理</a>
+        <a href="/admin/magazine/list.html" class="nav-item active"><span class="nav-icon">📖</span> 杂志管理</a>
+        <a href="/admin/cover/list.html" class="nav-item"><span class="nav-icon">🖼</span> 封面管理</a>
       </nav>
     </aside>
     <main class="main-content">
@@ -21,7 +21,7 @@
       <div class="content-area">
         <div class="search-bar">
           <input type="text" id="searchInput" placeholder="搜索杂志名称...">
-          <button class="btn btn-primary" id="addBtn">＋ 新增杂志</button>
+          <button class="btn btn-primary" id="addBtn">+ 新增杂志</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -53,7 +53,7 @@
         <div class="form-row">
           <div class="form-group">
             <label>杂志名称 *</label>
-            <input type="text" id="mName" placeholder="如：2026春季刊">
+            <input type="text" id="mName" placeholder="如：2026 春季刊">
           </div>
           <div class="form-group">
             <label>上传日期 *</label>
@@ -64,24 +64,22 @@
           <label>内容介绍</label>
           <textarea id="mDesc" placeholder="杂志内容简介..."></textarea>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>PC端封面</label>
-            <div style="display:flex;gap:8px;align-items:center">
-              <img id="mCoverPcPreview" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='50' fill='%23ddd'><rect width='80' height='50'/></svg>" style="width:80px;height:50px;object-fit:cover;border-radius:4px">
-              <input type="text" id="mCoverPc" placeholder="封面图片URL" style="flex:1">
-            </div>
-          </div>
-          <div class="form-group">
-            <label>移动端封面</label>
-            <div style="display:flex;gap:8px;align-items:center">
-              <img id="mCoverMobilePreview" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='50' fill='%23ddd'><rect width='80' height='50'/></svg>" style="width:80px;height:50px;object-fit:cover;border-radius:4px">
-              <input type="text" id="mCoverMobile" placeholder="封面图片URL" style="flex:1">
+        <div class="form-group">
+          <label>封面图片 <small style="color:#888">（统一一个封面，自动适配 PC / 移动端展示）</small></label>
+          <div style="display:flex;gap:10px;align-items:flex-start;background:#f8fbff;border:1px solid #d6e8ff;border-radius:6px;padding:10px">
+            <img id="mCoverPreview" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='90' fill='%23e8e8e8'><rect width='160' height='90'/></svg>" style="width:160px;height:90px;object-fit:cover;border-radius:4px;background:#eee;flex-shrink:0">
+            <div style="flex:1;min-width:0">
+              <input type="file" id="mCoverFile" accept="image/*" style="display:block;margin-bottom:4px;font-size:12px">
+              <input type="hidden" id="mCoverUrl" value="">
+              <div style="font-size:11px;color:#666;line-height:1.6">
+                📐 推荐尺寸 <b style="color:#1890ff">1920 × 1080</b>（16:9 横屏） · ≤ 5MB · JPG/PNG/WebP<br>
+                📱 在手机端展示时会自动中心裁切显示中间部分
+              </div>
             </div>
           </div>
         </div>
         <div class="form-group">
-          <label>状态</label>
+            <label>状态</label>
           <select id="mEnabled" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px">
             <option value="1">启用</option>
             <option value="0">停用</option>
@@ -95,7 +93,7 @@
     </div>
   </div>
 
-  <script src="/js/api.js"></script>
+  <script src="/admin/js/api.js"></script>
   <script>
     let currentEditId = null;
 
@@ -114,11 +112,12 @@
         <tr>
           <td>${m.id}</td>
           <td><img src="${coverImg(m.cover_pc)}" class="table-img" onerror="this.src='data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%2760%27 height=%2740%27 fill=%27%23ddd%27><rect width=%2760%27 height=%2740%27/></svg>'"></td>
-          <td><a href="/magazine/edit.html?id=${m.id}" style="color:var(--primary);text-decoration:none;font-weight:500">${m.name}</a></td>
+          <td><a href="/admin/magazine/edit.html?id=${m.id}" style="color:var(--primary);text-decoration:none;font-weight:500">${m.name}</a></td>
           <td>${formatDate(m.upload_date)}</td>
           <td><span class="status-badge ${m.enabled ? 'status-enabled' : 'status-disabled'}">${m.enabled ? '启用' : '停用'}</span></td>
           <td>
-            <a href="/magazine/edit.html?id=${m.id}" class="btn btn-sm btn-secondary">编辑</a>
+            <a href="http://localhost:3012/reader/viewer.html?id=${m.id}" target="_blank" class="btn btn-sm btn-primary" title="在阅读端新窗口打开">预览</a>
+            <a href="/admin/magazine/edit.html?id=${m.id}" class="btn btn-sm btn-secondary">编辑</a>
             <button class="btn btn-sm btn-danger" onclick="deleteMagazine(${m.id})">删除</button>
           </td>
         </tr>
@@ -126,7 +125,7 @@
     }
 
     async function deleteMagazine(id) {
-      if (!confirm('确认删除这本杂志？')) return;
+      if (!confirm('确认删除这本杂志吗？')) return;
       await api.del('/magazines/' + id);
       toast('删除成功', 'success');
       loadMagazines();
@@ -139,10 +138,9 @@
       document.getElementById('mName').value = '';
       document.getElementById('mDate').value = new Date().toISOString().slice(0,10);
       document.getElementById('mDesc').value = '';
-      document.getElementById('mCoverPc').value = '';
-      document.getElementById('mCoverMobile').value = '';
-      document.getElementById('mCoverPcPreview').src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="50" fill="%23ddd"><rect width="80" height="50"/></svg>';
-      document.getElementById('mCoverMobilePreview').src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="50" fill="%23ddd"><rect width="80" height="50"/></svg>';
+      document.getElementById('mCoverFile').value = '';
+      document.getElementById('mCoverUrl').value = '';
+      document.getElementById('mCoverPreview').src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90" fill="%23e8e8e8"><rect width="160" height="90"/></svg>';
       document.getElementById('mEnabled').value = '1';
       document.getElementById('magazineModal').classList.remove('hidden');
     });
@@ -154,11 +152,13 @@
       const name = document.getElementById('mName').value.trim();
       const upload_date = document.getElementById('mDate').value;
       if (!name || !upload_date) { toast('名称和日期必填', 'error'); return; }
+      // 统一封面：上传一个 URL 同时写进 cover_pc 和 cover_mobile（前台两处展示位都拿得到）
+      const coverUrl = document.getElementById('mCoverUrl').value;
       const payload = {
         name, upload_date,
         description: document.getElementById('mDesc').value,
-        cover_pc: document.getElementById('mCoverPc').value,
-        cover_mobile: document.getElementById('mCoverMobile').value,
+        cover_pc: coverUrl,
+        cover_mobile: coverUrl,
         enabled: Number(document.getElementById('mEnabled').value)
       };
       try {
@@ -174,9 +174,25 @@
       } catch (e) { toast(e.message, 'error'); }
     });
 
-    // 封面预览
-    document.getElementById('mCoverPc').addEventListener('input', e => { document.getElementById('mCoverPcPreview').src = coverImg(e.target.value) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="50" fill="%23ddd"><rect width="80" height="50"/></svg>'; });
-    document.getElementById('mCoverMobile').addEventListener('input', e => { document.getElementById('mCoverMobilePreview').src = coverImg(e.target.value) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="50" fill="%23ddd"><rect width="80" height="50"/></svg>'; });
+    // 封面上传：选完文件后调 /api/upload，返回的 /uploads/xxx.png 存进 hidden
+    document.getElementById('mCoverFile').addEventListener('change', async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) {
+        if (!confirm('文件 ' + (file.size / 1024 / 1024).toFixed(1) + 'MB 超过推荐 5MB，仍要上传吗？')) {
+          e.target.value = ''; return;
+        }
+      }
+      const fd = new FormData();
+      fd.append('file', file);
+      try {
+        const r = await api.post('/upload', fd, true);
+        document.getElementById('mCoverUrl').value = r.path;        // /uploads/xxx.png
+        document.getElementById('mCoverPreview').src = r.path;       // 即时预览
+        toast('封面上传成功', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+      e.target.value = '';
+    });
 
     document.getElementById('searchInput').addEventListener('input', loadMagazines);
     loadMagazines();

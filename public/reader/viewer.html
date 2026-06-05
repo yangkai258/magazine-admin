@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>杂志阅读</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; background: #fff; }
+
+    .back-btn { position: fixed; top: 16px; left: 16px; background: rgba(0,0,0,0.55); backdrop-filter: blur(10px); color: #fff; border: 1px solid rgba(255,255,255,0.35); border-radius: 24px; padding: 8px 18px; font-size: 13px; font-family: Arial, sans-serif; cursor: pointer; z-index: 200; display: flex; align-items: center; gap: 6px; transition: all 0.2s; text-decoration: none; }
+    .back-btn:hover { background: rgba(0,0,0,0.75); border-color: rgba(255,255,255,0.6); }
+    .back-btn svg { width: 14px; height: 14px; fill: #fff; }
+
+    /* ===== 桌面端（双页书脊） ===== */
+    .desktop-mode .flipbook-viewport { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; background: #fff; transform-origin: center center; cursor: grab; }
+    .desktop-mode .flipbook-viewport.dragging { cursor: grabbing; }
+    .desktop-mode #flipbook { width: 100vw; height: 100vh; }
+    .desktop-mode #flipbook .page { width: 100%; height: 100%; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .desktop-mode #flipbook .page img { width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+    .desktop-mode #flipbook .page .half { width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fff; }
+    .desktop-mode #flipbook .page .half img { width: 100%; height: 100%; object-fit: contain; }
+    .desktop-mode #flipbook .page .half.left { box-shadow: inset -20px 0 30px -15px rgba(0,0,0,0.18); }
+    .desktop-mode #flipbook .page .half.right { box-shadow: inset 20px 0 30px -15px rgba(0,0,0,0.18); }
+
+    /* 桌面端导航 */
+    .nav-btn { position: fixed; top: 50%; transform: translateY(-50%); width: 64px; height: 120px; background: rgba(255,255,255,0.85); border: 2px solid rgba(255,255,255,0.9); border-radius: 12px; cursor: pointer; z-index: 100; display: flex; align-items: center; justify-content: center; transition: all 0.2s; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    .nav-btn:hover { background: #fff; box-shadow: 0 4px 30px rgba(0,0,0,0.4); }
+    .nav-btn svg { width: 28px; height: 28px; fill: #333; }
+    .nav-btn.prev { left: 20px; }
+    .nav-btn.next { right: 20px; }
+    .page-indicator { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.5); color: #fff; padding: 6px 16px; border-radius: 20px; font-size: 14px; font-family: Arial, sans-serif; z-index: 100; pointer-events: none; }
+
+    /* 桌面端缩放控件 */
+    .zoom-ctl { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
+    .zoom-ctl button { width: 48px; height: 48px; background: rgba(255,255,255,0.9); border: 2px solid rgba(255,255,255,0.9); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.3); transition: all 0.2s; }
+    .zoom-ctl button:hover { background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.4); transform: scale(1.08); }
+    .zoom-ctl button svg { width: 22px; height: 22px; fill: #333; }
+    .zoom-ctl button.active { background: #333; border-color: #333; }
+    .zoom-ctl button.active svg { fill: #fff; }
+    .zoom-label { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.5); color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-family: Arial, sans-serif; z-index: 100; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
+    .zoom-label.show { opacity: 1; }
+
+    /* ===== 移动端 ===== */
+    .mobile-mode .flipbook-viewport, .mobile-mode .nav-btn, .mobile-mode .zoom-ctl, .mobile-mode .page-indicator { display: none !important; }
+    .mobile-mode .mobile-viewport { display: block !important; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; overflow: hidden; }
+    .mobile-mode .mobile-track { display: flex; width: 100%; height: 100%; transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
+    .mobile-mode .mobile-track .mobile-page { flex: 0 0 100vw; width: 100vw; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden !important; }
+    .mobile-mode .mobile-track .mobile-page img { width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; }
+
+    /* 移动端底部圆点 */
+    .mobile-dots-bar { position: fixed; bottom: 90px; left: 0; right: 0; display: flex; gap: 6px; justify-content: center; z-index: 100; padding: 0 8px; }
+    .mobile-dots-bar .m-dot { height: 6px; border-radius: 3px; background: #ccc; transition: all 0.25s; cursor: pointer; width: 6px; }
+    .mobile-dots-bar .m-dot.active { background: #333; width: 18px; }
+
+    /* 移动端底部导航 */
+    .mobile-bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 24px; padding: 16px 20px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: rgba(255,255,255,0.97); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 100; box-shadow: 0 -2px 20px rgba(0,0,0,0.06); }
+    .mobile-bottom-nav .m-nav-btn { width: 44px; height: 44px; border-radius: 50%; background: #fff; border: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
+    .mobile-bottom-nav .m-nav-btn:active { background: #f0f0f0; transform: scale(0.95); }
+    .mobile-bottom-nav .m-nav-btn:disabled { opacity: 0.3; pointer-events: none; }
+    .mobile-bottom-nav .m-nav-btn svg { width: 20px; height: 20px; fill: none; stroke: #333; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .mobile-bottom-nav .m-page-info { font-size: 15px; color: #333; min-width: 60px; text-align: center; font-weight: 500; }
+
+    .loading { position: fixed; inset: 0; background: #fff; display: flex; align-items: center; justify-content: center; color: #333; font-family: Arial, sans-serif; font-size: 16px; z-index: 999; }
+    .loading.hidden { display: none; }
+
+    /* 缺图占位 */
+    .page-missing {
+      width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #fff5f5;
+      color: #c62828;
+      font-family: 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+      border: 2px dashed #e57373;
+      box-sizing: border-box;
+    }
+    .page-missing-icon { font-size: 48px; margin-bottom: 12px; }
+    .page-missing-text { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
+    .page-missing-url { font-size: 11px; color: #999; max-width: 80%; text-align: center; word-break: break-all; font-family: monospace; }
+
+    @media (max-width: 768px) { .nav-btn { width: 36px; height: 60px; } }
+  </style>
+</head>
+<body>
+<div class="loading" id="loading">页面加载中...</div>
+
+<a class="back-btn" href="/">
+  <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+  返回目录
+</a>
+
+<!-- 桌面端 -->
+<div class="flipbook-viewport desktop-mode" id="viewport">
+  <button class="nav-btn prev" id="prevBtn">
+    <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+  </button>
+  <div id="flipbook"></div>
+  <button class="nav-btn next" id="nextBtn">
+    <svg viewBox="0 0 24 24"><path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>
+  </button>
+</div>
+
+<!-- 移动端 -->
+<div class="mobile-viewport mobile-mode" id="mobileViewport" style="display:none">
+  <div class="mobile-track" id="mobileTrack"></div>
+</div>
+<div class="mobile-dots-bar mobile-mode" id="mobileDotsBar" style="display:none"></div>
+<div class="mobile-bottom-nav mobile-mode" id="mobileBottomNav" style="display:none">
+  <button class="m-nav-btn" id="mPrevBtn">
+    <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+  </button>
+  <div class="m-page-info" id="mPageInfo">1 / 1</div>
+  <button class="m-nav-btn" id="mNextBtn">
+    <svg viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"></polyline></svg>
+  </button>
+</div>
+
+<div class="zoom-ctl desktop-mode" id="zoomCtl" style="display:none">
+  <button id="zoomInBtn" title="放大">
+    <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+  </button>
+  <button id="zoomOutBtn" title="缩小">
+    <svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
+  </button>
+  <button id="zoomResetBtn" title="还原">
+    <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+  </button>
+</div>
+<div class="zoom-label desktop-mode" id="zoomLabel" style="display:none"></div>
+<div class="page-indicator desktop-mode" id="pageIndicator" style="display:none"></div>
+
+<script src="lib/jquery.min.js"></script>
+<script src="lib/turn.min.js"></script>
+<script>
+(function() {
+  var API_BASE = '/api';  // 同源，避免部署后跨域
+  var magazineId = new URLSearchParams(location.search).get('id') || 1;
+
+  var pages = [];           // 从管理平台API获取
+  var TOTAL_IMGS = 0;       // 总图片数 = pages.length
+  var currentImg = 1;
+  var IS_MOBILE = $(window).width() < 768;
+
+  var $viewport = $('#viewport');
+  var $mobileViewport = $('#mobileViewport');
+  var $mobileTrack = $('#mobileTrack');
+  var $mobileDotsBar = $('#mobileDotsBar');
+  var $mPrevBtn = $('#mPrevBtn');
+  var $mNextBtn = $('#mNextBtn');
+  var $mPageInfo = $('#mPageInfo');
+
+  // ===== 杂志页图片URL（直接用OSS URL）=====
+  function imgUrl(idx) {
+    // idx 是 1-based，pages 数组也是 1-based
+    return pages[idx - 1] ? pages[idx - 1].image_path : '';
+  }
+
+  // ========== 移动端 ==========
+  var mobileZoom = 1;
+  var mobilePanX = 0, mobilePanY = 0;
+  var isPinching = false, pinchStartDist = 0, pinchStartScale = 1;
+  var pinchCenterX = 0, pinchCenterY = 0;
+  var isMobileDrag = false, mobileDragStartX = 0, mobileDragStartY = 0;
+  var mobileDragStartPanX = 0, mobileDragStartPanY = 0;
+
+  function applyMobileTransform() {
+    var $curPage = $mobileTrack.children('.mobile-page').eq(currentImg - 1);
+    $curPage.css('transform', 'translate(' + mobilePanX + 'px, ' + mobilePanY + 'px) scale(' + mobileZoom + ')');
+  }
+
+  function clampMobilePan() {
+    if (mobileZoom <= 1) { mobilePanX = 0; mobilePanY = 0; return; }
+    var $curPage = $mobileTrack.children('.mobile-page').eq(currentImg - 1);
+    var pw = $curPage.width() || window.innerWidth;
+    var ph = $curPage.height() || window.innerHeight;
+    var maxX = (pw * (mobileZoom - 1)) / 2;
+    var maxY = (ph * (mobileZoom - 1)) / 2;
+    mobilePanX = Math.max(-maxX, Math.min(maxX, mobilePanX));
+    mobilePanY = Math.max(-maxY, Math.min(maxY, mobilePanY));
+  }
+
+  function getTouchDistance(t1, t2) {
+    return Math.sqrt(Math.pow(t2.clientX - t1.clientX, 2) + Math.pow(t2.clientY - t1.clientY, 2));
+  }
+
+  function getTouchCenter(t1, t2) {
+    return { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+  }
+
+  function resetMobileZoom() {
+    mobileZoom = 1; mobilePanX = 0; mobilePanY = 0;
+    var $curPage = $mobileTrack.children('.mobile-page').eq(currentImg - 1);
+    $curPage.css('transform', '');
+  }
+
+  function goImg(n) {
+    n = Math.max(1, Math.min(n, TOTAL_IMGS));
+    var $prevPage = $mobileTrack.children('.mobile-page').eq(currentImg - 1);
+    $prevPage.css('transform', '');
+    currentImg = n;
+    mobileZoom = 1; mobilePanX = 0; mobilePanY = 0;
+    $mobileTrack.css('transform', 'translateX(-' + ((n - 1) * 100) + 'vw)');
+    $mPageInfo.text(n + ' / ' + TOTAL_IMGS);
+    $mPrevBtn.prop('disabled', n <= 1);
+    $mNextBtn.prop('disabled', n >= TOTAL_IMGS);
+    $mobileDotsBar.find('.m-dot').removeClass('active');
+    if (n === 1) $mobileDotsBar.find('.m-dot[data-idx="first"]').addClass('active');
+    else if (n === TOTAL_IMGS) $mobileDotsBar.find('.m-dot[data-idx="last"]').addClass('active');
+    else $mobileDotsBar.find('.m-dot[data-idx="middle"]').addClass('active');
+  }
+
+  function buildMobileTrack() {
+    $mobileTrack.css('width', TOTAL_IMGS * 100 + 'vw');
+    $mobileTrack.empty();
+    for (var i = 1; i <= TOTAL_IMGS; i++) {
+      var $page = $('<div class="mobile-page"></div>');
+      if (missingPages[pages[i-1] ? pages[i-1].id : -1]) {
+        renderMissing($page, i);
+      } else {
+        var $img = $('<img src="' + imgUrl(i) + '" alt="" style="width:100vw;height:100%;object-fit:contain;display:block;">');
+        $page.append($img);
+      }
+      $mobileTrack.append($page);
+    }
+  }
+
+  function buildMobileDots() {
+    $mobileDotsBar.empty();
+    $('<div class="m-dot" data-idx="first"></div>').on('click', function() { goImg(1); }).appendTo($mobileDotsBar);
+    $('<div class="m-dot" data-idx="middle"></div>').on('click', function() { goImg(Math.ceil(TOTAL_IMGS / 2)); }).appendTo($mobileDotsBar);
+    $('<div class="m-dot" data-idx="last"></div>').on('click', function() { goImg(TOTAL_IMGS); }).appendTo($mobileDotsBar);
+  }
+
+  function initMobile() {
+    buildMobileTrack();
+    buildMobileDots();
+    goImg(1);
+
+    $mobileViewport.on('touchstart', function(e) {
+      if (e.touches.length === 2) {
+        isPinching = true; isMobileDrag = false;
+        pinchStartDist = getTouchDistance(e.touches[0], e.touches[1]);
+        pinchStartScale = mobileZoom;
+        var center = getTouchCenter(e.touches[0], e.touches[1]);
+        pinchCenterX = center.x; pinchCenterY = center.y;
+        e.preventDefault();
+      } else if (e.touches.length === 1 && mobileZoom > 1) {
+        isMobileDrag = true; isPinching = false;
+        mobileDragStartX = e.touches[0].clientX; mobileDragStartY = e.touches[0].clientY;
+        mobileDragStartPanX = mobilePanX; mobileDragStartPanY = mobilePanY;
+      }
+    });
+
+    $mobileViewport.on('touchmove', function(e) {
+      if (e.touches.length === 2 && isPinching) {
+        e.preventDefault();
+        var dist = getTouchDistance(e.touches[0], e.touches[1]);
+        var scale = dist / pinchStartDist;
+        mobileZoom = Math.max(1, Math.min(pinchStartScale * scale, 5));
+        var center = getTouchCenter(e.touches[0], e.touches[1]);
+        mobilePanX += center.x - pinchCenterX;
+        mobilePanY += center.y - pinchCenterY;
+        pinchCenterX = center.x; pinchCenterY = center.y;
+        clampMobilePan();
+        applyMobileTransform();
+        showMobileLabel(Math.round(mobileZoom * 100) + '%');
+      } else if (e.touches.length === 1 && isMobileDrag) {
+        e.preventDefault();
+        mobilePanX = mobileDragStartPanX + (e.touches[0].clientX - mobileDragStartX);
+        mobilePanY = mobileDragStartPanY + (e.touches[0].clientY - mobileDragStartY);
+        clampMobilePan();
+        applyMobileTransform();
+      }
+    }, { passive: false });
+
+    $mobileViewport.on('touchend', function() {
+      if (isPinching) { isPinching = false; if (mobileZoom <= 1.05) resetMobileZoom(); }
+      if (isMobileDrag) isMobileDrag = false;
+    });
+
+    $mPrevBtn.on('click', function() { if (mobileZoom <= 1 && currentImg > 1) goImg(currentImg - 1); });
+    $mNextBtn.on('click', function() { if (mobileZoom <= 1 && currentImg < TOTAL_IMGS) goImg(currentImg + 1); });
+
+    // 双击切换缩放
+    $mobileViewport.on('dblclick', function(e) {
+      if (mobileZoom > 1) { resetMobileZoom(); mobileZoom = 1; }
+      else {
+        mobileZoom = 2;
+        var $curPage = $mobileTrack.children('.mobile-page').eq(currentImg - 1);
+        var pw = $curPage.width(), ph = $curPage.height();
+        mobilePanX = -(e.clientX - pw / 2);
+        mobilePanY = -(e.clientY - ph / 2);
+        clampMobilePan();
+        applyMobileTransform();
+        showMobileLabel('200%');
+      }
+    });
+  }
+
+  // 移动端缩放标签
+  var mobileLabelTimer = null;
+  function showMobileLabel(text) {
+    var $lbl = $('#zoomLabel');
+    $lbl.text(text).addClass('show');
+    clearTimeout(mobileLabelTimer);
+    mobileLabelTimer = setTimeout(function() { $lbl.removeClass('show'); }, 1500);
+  }
+
+  // ========== 桌面端缩放 ==========
+  var zoomLevel = 1;
+  var panX = 0, panY = 0;
+  var isDraggingDesk = false;
+  var dragStartX = 0, dragStartY = 0;
+  var deskLabelTimer = null;
+
+  function showDeskLabel(text) {
+    var $lbl = $('#zoomLabel');
+    $lbl.text(text).addClass('show');
+    clearTimeout(deskLabelTimer);
+    deskLabelTimer = setTimeout(function() { $lbl.removeClass('show'); }, 1500);
+  }
+
+  function clampDeskPan() {
+    if (zoomLevel <= 1) { panX = 0; panY = 0; return; }
+    var maxX = ($viewport.width() * (zoomLevel - 1)) / 2;
+    var maxY = ($viewport.height() * (zoomLevel - 1)) / 2;
+    panX = Math.max(-maxX, Math.min(maxX, panX));
+    panY = Math.max(-maxY, Math.min(maxY, panY));
+  }
+
+  function applyDeskTransform() {
+    $viewport.css('transform', 'translate(' + panX + 'px, ' + panY + 'px) scale(' + zoomLevel + ')');
+  }
+
+  function applyDeskZoom(level) {
+    zoomLevel = Math.max(1, Math.min(level, 5));
+    clampDeskPan();
+    applyDeskTransform();
+    showDeskLabel(Math.round(zoomLevel * 100) + '%');
+  }
+
+  // ========== 桌面端翻书 ==========
+  // TOTAL_PAGES = spread 总数。封面 + (N-2)/2 个内页 spread + 封底
+  // 例如 78 页 = 1 封面 + 38 内页 spread + 1 封底 = 40 spreads
+  var TOTAL_PAGES = 0;
+  // 缺图集合：page.id -> true（被 HEAD 标记为缺失的页）。用于 UI 标红
+  var missingPages = {};
+
+  // 缺图占位 DOM
+  function renderMissing($container, pageIdx) {
+    var $box = $('<div>').addClass('page-missing');
+    $box.html('<div class="page-missing-icon">⚠</div>' +
+              '<div class="page-missing-text">第 ' + pageIdx + ' 页缺失</div>' +
+              '<div class="page-missing-url">' + (imgUrl(pageIdx) || '').replace(/^https?:\/\//, '') + '</div>');
+    $container.append($box);
+  }
+
+  function renderSpreadPage($page, spreadIdx) {
+    $page.empty();
+    // 第一页 / 最后一页：单图占满全宽（封面/封底一般是全图）
+    // 中间页：左 + 右 双页 spread（书脊效果）
+    if (spreadIdx === 1) {
+      if (missingPages[1]) { renderMissing($page, 1); }
+      else { $page.append($('<img>').attr('src', imgUrl(1))); }
+    } else if (spreadIdx === TOTAL_PAGES) {
+      if (missingPages[TOTAL_IMGS]) { renderMissing($page, TOTAL_IMGS); }
+      else { $page.append($('<img>').attr('src', imgUrl(TOTAL_IMGS))); }
+    } else {
+      // 关键：左 = 2*(spreadIdx-1)，不是 2*spreadIdx-1
+      // 之前公式会把 page 2 (spread 2 的左页) 整个跳掉
+      var leftNum = 2 * (spreadIdx - 1);
+      var rightNum = leftNum + 1;
+      var $left = $('<div>').addClass('half left');
+      var $right = $('<div>').addClass('half right');
+      if (missingPages[leftNum]) { renderMissing($left, leftNum); }
+      else { $left.append($('<img>').attr('src', imgUrl(leftNum))); }
+      if (missingPages[rightNum]) { renderMissing($right, rightNum); }
+      else { $right.append($('<img>').attr('src', imgUrl(rightNum))); }
+      $page.append($left, $right);
+    }
+  }
+
+  // 健全性检查：探测每张图能不能 load 进来。失败时**只 log 警告，不重渲染**。
+  // 避免 Image.onerror 偶发（CORS 抖动、并发过高、OSS 限流）误判，
+  // 触发重渲染把正常页替换成红色占位。
+  // 浏览器本身对加载失败的 <img> 会显示 broken icon，用户可见即可。
+  // 限制并发 6 个，给 OSS 留点余量。
+  async function sanityCheckPages() {
+    var concurrency = 6;
+    var queue = pages.slice();
+    var results = [];
+    async function worker() {
+      while (queue.length) {
+        var p = queue.shift();
+        var ok = await new Promise(function(resolve) {
+          var img = new Image();
+          var done = false;
+          function finish(v) { if (!done) { done = true; resolve(v); } }
+          img.onload = function() { finish(img.naturalWidth > 0); };
+          img.onerror = function() { finish(false); };
+          // 8s 超时：网络慢或 OSS 抖动时，给足时间
+          setTimeout(function() { finish(false); }, 8000);
+          img.src = p.image_path;
+        });
+        results.push({ id: p.id, idx: pages.indexOf(p) + 1, ok: ok });
+      }
+    }
+    var workers = [];
+    for (var i = 0; i < Math.min(concurrency, pages.length); i++) workers.push(worker());
+    await Promise.all(workers);
+    var missing = results.filter(function(r) { return !r.ok; });
+    if (missing.length > 0) {
+      console.warn('[sanity] ' + missing.length + ' 张加载失败:', missing.map(function(r) { return r.idx; }));
+      missing.forEach(function(r) { missingPages[r.id] = true; });
+    } else {
+      console.log('[sanity] ' + results.length + '/' + results.length + ' 全部可达');
+    }
+  }
+
+  function buildFlipbook() {
+    // spread 总数 = 1 封面 + 38 个内页 spread + 1 封底 = 40（以 78 页为例）
+    TOTAL_PAGES = (TOTAL_IMGS - 2) / 2 + 2;
+    var $flipbook = $('#flipbook');
+    $flipbook.empty();
+    for (var i = 1; i <= TOTAL_PAGES; i++) {
+      var $page = $('<div>').addClass('page').attr('data-page', i);
+      renderSpreadPage($page, i);
+      $flipbook.append($page);
+    }
+    var w = $(window).width();
+    var h = $(window).height();
+    $flipbook.turn({
+      width: w, height: h,
+      autoCenter: true,
+      acceleration: true,
+      display: 'single',
+      duration: 800,
+      when: {
+        turned: function(e, page) {
+          $('#pageIndicator').text(page + ' / ' + TOTAL_PAGES);
+          updateDeskNav(page);
+        }
+      }
+    });
+    $('#pageIndicator').text('1 / ' + TOTAL_PAGES);
+    updateDeskNav(1);
+  }
+
+  function updateDeskNav(page) {
+    $('#prevBtn').css('opacity', page <= 1 ? 0.3 : 1);
+    $('#nextBtn').css('opacity', page >= TOTAL_PAGES ? 0.3 : 1);
+  }
+
+  // ========== 初始化 ==========
+  // 预加载首页图片，避免首屏闪白。最多等 5s 强制显示。
+  function preloadFirstImageThenInit(m) {
+    var firstUrl = (m.pages && m.pages[0]) ? m.pages[0].image_path : '';
+    if (!firstUrl) { buildReader(m); return; }
+    var preloader = new Image();
+    var forced = false;
+    function go() { if (!forced) { forced = true; buildReader(m); } }
+    preloader.onload = go;
+    preloader.onerror = go;
+    preloader.src = firstUrl;
+    setTimeout(go, 5000);
+  }
+
+  function buildReader(m) {
+    pages = m.pages || [];
+    TOTAL_IMGS = pages.length;
+    document.title = m.name + ' - 阅读';
+    $('#loading').addClass('hidden');
+
+    IS_MOBILE = $(window).width() < 768;
+
+    // 后台健全性检查：HEAD/load 失败则标红重渲染
+    sanityCheckPages();
+
+    if (IS_MOBILE) {
+      $('body').addClass('mobile-mode');
+      $mobileViewport.show();
+      $mobileDotsBar.show();
+      $('#mobileBottomNav').show();
+      $('#zoomCtl').removeClass('desktop-mode').addClass('mobile-mode').show();
+      $('#zoomLabel').removeClass('desktop-mode').addClass('mobile-mode').show();
+      initMobile();
+    } else {
+      $('body').addClass('desktop-mode');
+      $viewport.show();
+      $('#zoomCtl').show();
+      $('#zoomLabel').show();
+      $('#pageIndicator').show();
+      buildFlipbook();
+
+      $('#prevBtn').on('click', function() {
+        var p = $('#flipbook').turn('page');
+        if (p > 1) { $('#flipbook').turn('previous'); updateDeskNav(p - 1); }
+      });
+      $('#nextBtn').on('click', function() {
+        var p = $('#flipbook').turn('page');
+        if (p < TOTAL_PAGES) { $('#flipbook').turn('next'); updateDeskNav(p + 1); }
+      });
+
+      // 桌面缩放
+      $viewport.on('mousedown', function(e) {
+        if (zoomLevel <= 1) return;
+        isDraggingDesk = true;
+        dragStartX = e.clientX - panX; dragStartY = e.clientY - panY;
+        $viewport.addClass('dragging');
+      });
+      $(document).on('mousemove', function(e) {
+        if (!isDraggingDesk) return;
+        panX = e.clientX - dragStartX; panY = e.clientY - dragStartY;
+        clampDeskPan(); applyDeskTransform();
+      });
+      $(document).on('mouseup', function() {
+        if (isDraggingDesk) { isDraggingDesk = false; $viewport.removeClass('dragging'); }
+      });
+
+      $viewport.on('touchstart', function(e) {
+        if (zoomLevel <= 1 || e.touches.length !== 1) return;
+        isDraggingDesk = true;
+        dragStartX = e.touches[0].clientX - panX; dragStartY = e.touches[0].clientY - panY;
+        $viewport.addClass('dragging');
+      });
+      $(document).on('touchmove', function(e) {
+        if (!isDraggingDesk || e.touches.length !== 1) return;
+        panX = e.touches[0].clientX - dragStartX; panY = e.touches[0].clientY - panY;
+        clampDeskPan(); applyDeskTransform();
+      });
+      $(document).on('touchend', function() {
+        if (isDraggingDesk) { isDraggingDesk = false; $viewport.removeClass('dragging'); }
+      });
+
+      $('#zoomInBtn').on('click', function() { applyDeskZoom(zoomLevel + 0.5); });
+      $('#zoomOutBtn').on('click', function() { applyDeskZoom(zoomLevel - 0.5); });
+      $('#zoomResetBtn').on('click', function() { panX = 0; panY = 0; applyDeskZoom(1); });
+
+      $(document).on('keydown', function(e) {
+        if (e.key === '+' || e.key === '=') applyDeskZoom(zoomLevel + 0.5);
+        if (e.key === '-') applyDeskZoom(zoomLevel - 0.5);
+        if (e.key === '0') { panX = 0; panY = 0; applyDeskZoom(1); }
+        if (e.key === 'ArrowRight') { var p = $('#flipbook').turn('page'); if (p < TOTAL_PAGES) { $('#flipbook').turn('next'); updateDeskNav(p + 1); } }
+        if (e.key === 'ArrowLeft') { var p = $('#flipbook').turn('page'); if (p > 1) { $('#flipbook').turn('previous'); updateDeskNav(p - 1); } }
+      });
+    }
+  }
+
+  $.get(API_BASE + '/public/magazines/' + magazineId, function(m) {
+    preloadFirstImageThenInit(m);
+  }).fail(function() {
+    $('#loading').text('加载失败，请检查阅读端服务是否启动（http://localhost:3010）');
+  });
+
+  function updateDeskNav(page) {
+    $('#prevBtn').css('opacity', page <= 1 ? 0.3 : 1);
+    $('#nextBtn').css('opacity', page >= TOTAL_PAGES ? 0.3 : 1);
+  }
+})();
+</script>
+</body>
+</html>
