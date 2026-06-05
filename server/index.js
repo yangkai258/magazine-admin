@@ -4,10 +4,9 @@
 const publicApp = require('./public');
 const adminApp = require('./admin');
 
-// 临时硬编码 3012/3032：旧的 30316 + 13988 进程占着 3010/3011/3030/3031 杀不掉，
-// 新服务绕开到 3012/3032。等下次能 kill 旧进程后再改回 3010/3030。
-const PUBLIC_PORT = Number(process.env.PUBLIC_PORT) || 3012;
-const ADMIN_PORT = Number(process.env.ADMIN_PORT) || 3032;
+// 端口可通过 env 覆盖：PUBLIC_PORT / ADMIN_PORT
+const PUBLIC_PORT = Number(process.env.PUBLIC_PORT) || 3010;
+const ADMIN_PORT = Number(process.env.ADMIN_PORT) || 3030;
 
 publicApp.listen(PUBLIC_PORT, () => {
   console.log(`公共阅读端:   http://localhost:${PUBLIC_PORT}`);
