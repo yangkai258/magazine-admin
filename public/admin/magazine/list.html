@@ -146,7 +146,7 @@
           <td>${formatDate(m.upload_date)}</td>
           <td><span class="status-badge ${m.enabled ? 'status-enabled' : 'status-disabled'}">${m.enabled ? '启用' : '停用'}</span></td>
           <td>
-            <a href="../reader/viewer.html?id=${m.id}&t=${window.__tenantSlug || 'zhuobao'}" target="_blank" class="btn btn-sm btn-primary" title="在阅读端新窗口打开">预览</a>
+            <a href="${location.protocol}//${location.hostname}:50100/reader/viewer.html?id=${m.id}&t=${window.__tenantSlug || 'zhuobao'}" target="_blank" class="btn btn-sm btn-primary" title="在阅读端新窗口打开">预览</a>
             ${state.isOwner ? `
             <a href="/admin/magazine/edit.html?id=${m.id}" class="btn btn-sm btn-secondary">编辑</a>
             <button class="btn btn-sm btn-danger" onclick="deleteMagazine(${m.id})">删除</button>
