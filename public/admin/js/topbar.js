@@ -30,10 +30,10 @@
   }
 
   // 侧边栏富 logo HTML（其他页只有文本 .sidebar-logo 时替换）
+  // 注：只显示「首字 + 名字 + 副标」，不渲染上传图片（32x32 容易糊）
   function buildRichSidebarLogo(tenant) {
     var name = escapeHtml(tenant.name || '杂志管理平台');
     var slug = escapeHtml(tenant.slug || '');
-    var logoUrl = tenant.logo_url || '';
     var isPlatform = !!tenant.is_platform_admin;
     var sub = isPlatform
       ? '👑 平台管理员 · SaaS · v4'
@@ -97,21 +97,9 @@
     }
     if (fbEl && tenant.name) fbEl.textContent = tenant.name.charAt(0);
 
-    // 注入 logo img（如果有）
-    var logoWrap = document.getElementById('sidebarLogo');
-    if (logoWrap && tenant.logo_url) {
-      // 移除旧的 img（如果存在）
-      var oldImg = logoWrap.querySelector('img');
-      if (oldImg) oldImg.remove();
-      var img = document.createElement('img');
-      img.src = tenant.logo_url;
-      img.alt = tenant.name || 'logo';
-      img.style.cssText = 'width:32px;height:32px;object-fit:contain;border-radius:6px;';
-      img.onerror = function () { img.style.display = 'none'; if (fbEl) fbEl.style.display = ''; };
-      // 优先放在 fallback 之前
-      if (fbEl) logoWrap.insertBefore(img, fbEl); else logoWrap.appendChild(img);
-      if (fbEl) fbEl.style.display = 'none';
-    }
+    // 注：侧栏 logo 不渲染上传的图片 —— 统一只显示「租户名首字 + 租户名 + 副标」
+    // 原因：上传图片在小尺寸 (32x32) 下容易糊，文字 fallback 更清晰稳定
+    // 上传的 logo 仍保留在 data 里，branding 页可以预览/删除
   }
 
   function populateTopbarUserInfo(user) {
