@@ -27,10 +27,6 @@
           <span>欢迎，<b style="color:var(--text)" id="tbEmail">--</b></span>
           <span id="tbRoleChip" class="chip-role chip-role-viewer" style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;background:#f3f4f6;color:#4b5563;border:1px solid #e5e7eb">--</span>
         </div>
-        <div class="tenant-badge" id="tenantBadge" title="">
-          <div class="tenant-badge-fallback" id="tenantBadgeFallback">📚</div>
-          <div class="tenant-badge-name" id="tenantBadgeName">--<code></code></div>
-        </div>
         <button class="btn btn-secondary btn-sm" style="margin-left:0" onclick="MAG_AUTH.logout()">退出登录</button>
       </header>
       <div class="content-area" id="contentArea">
@@ -79,9 +75,9 @@
   <script src="/admin/js/api.js"></script>
   <script>
     // 渲染侧边栏 nav（统一从 nav.js 拿 10 项，按角色过滤）
+    // nav.render 完成后会自动调 MAG_TOPBAR.render 填充侧边栏 logo + 顶栏 user info
     MAG_NAV.render('dashboard').then(function (ctx) {
       var t = ctx && ctx.tenant;
-      // 填充租户品牌到顶栏 + 侧边栏（替代硬编码「杂志管理平台」）
       // 注：/api/auth/me 在 attachSession 已透出 logo_url + primary_color；
       //     但 session 是 login 时缓存的，用户改品牌后未重新登录会拿到旧值。
       //     所以这里再调一次 /api/admin/branding 拿最新值（不依赖 session 缓存）。

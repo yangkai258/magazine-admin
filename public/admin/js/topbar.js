@@ -165,23 +165,21 @@
     badge.title = tenant.slug || '';
   }
 
-  function injectTopbarIfMissing(user, tenant) {
+  function injectUserInfoIfMissing(user) {
     var topbar = document.querySelector('.top-bar');
     if (!topbar) return;
-    // 如果已有 #topbarUserInfo，只填充；否则注入
     if (document.getElementById('topbarUserInfo')) {
       populateTopbarUserInfo(user);
+      return;
+    }
+    // 找退出登录按钮，插在它前面
+    var logoutBtn = topbar.querySelector('button[onclick*="logout"]')
+                 || topbar.querySelector('button[onclick*="MAG_AUTH.logout"]')
+                 || Array.prototype.find.call(topbar.querySelectorAll('button'), function (b) { return /退出/.test(b.textContent); });
+    if (logoutBtn) {
+      logoutBtn.insertAdjacentHTML('beforebegin', buildTopbarUserInfo(user));
     } else {
-      // 找退出登录按钮，插在它前面；找不到就追加到末尾
-      var html = buildTopbarUserInfo(user) + buildTenantBadge(tenant);
-      var logoutBtn = topbar.querySelector('button[onclick*="logout"]')
-                   || topbar.querySelector('button[onclick*="MAG_AUTH.logout"]')
-                   || Array.prototype.find.call(topbar.querySelectorAll('button'), function (b) { return /退出/.test(b.textContent); });
-      if (logoutBtn) {
-        logoutBtn.insertAdjacentHTML('beforebegin', html);
-      } else {
-        topbar.insertAdjacentHTML('beforeend', html);
-      }
+      topbar.insertAdjacentHTML('beforeend', buildTopbarUserInfo(user));
     }
   }
 
@@ -201,15 +199,24 @@
   function ensureRichTenantBadge(tenant) {
     if (document.getElementById('tenantBadge')) {
       populateTenantBadge(tenant);
+      return;
+    }
+    // 注入到 topbar（user info 之前、退出登录之前）
+    var topbar = document.querySelector('.top-bar');
+    if (!topbar) return;
+    var html = buildTenantBadge(tenant);
+    // 优先插在 #topbarUserInfo 之后；否则插在退出登录前
+    var userInfo = document.getElementById('topbarUserInfo');
+    if (userInfo) {
+      userInfo.insertAdjacentHTML('afterend', html);
     } else {
-      // 没 #tenantBadge 容器就注入到 topbar（在 user info 后、退出登录前）
-      var topbar = document.querySelector('.top-bar');
-      if (topbar) {
-        var logoutBtn = topbar.querySelector('button[onclick*="logout"]')
-                     || Array.prototype.find.call(topbar.querySelectorAll('button'), function (b) { return /退出/.test(b.textContent); });
-        if (logoutBtn) {
-          logoutBtn.insertAdjacentHTML('beforebegin', buildTenantBadge(tenant));
-        }
+      var logoutBtn = topbar.querySelector('button[onclick*="logout"]')
+                   || topbar.querySelector('button[onclick*="MAG_AUTH.logout"]')
+                   || Array.prototype.find.call(topbar.querySelectorAll('button'), function (b) { return /退出/.test(b.textContent); });
+      if (logoutBtn) {
+        logoutBtn.insertAdjacentHTML('beforebegin', html);
+      } else {
+        topbar.insertAdjacentHTML('beforeend', html);
       }
     }
   }
@@ -217,6 +224,7 @@
   window.MAG_TOPBAR = {
     /**
      * 渲染顶栏 + 侧边栏 logo（自动适配 index.html 的富版 vs 其他页的简单版）
+     * 设计：每页只 1 个 logo = 侧边栏左上角那个。顶栏不放租户徽章（避免重复 + 让 user info 推到右）
      * @param {{tenant:object, user:object}} ctx
      */
     render: function (ctx) {
@@ -224,8 +232,8 @@
       var tenant = ctx.tenant || {};
       var user = ctx.user || {};
       ensureRichSidebarLogo(tenant);
-      ensureRichTenantBadge(tenant);
-      injectTopbarIfMissing(user, tenant);
+      // 顶栏只放 user info（推到右），不放租户徽章 —— 租户身份在侧栏已经有了
+      injectUserInfoIfMissing(user);
     }
   };
 })();
