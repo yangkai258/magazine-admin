@@ -74,6 +74,10 @@
           return ctx;
         }
         el.innerHTML = buildHtml(active, ctx);
+        // 顶栏 + 侧边栏 logo 由 topbar.js 提供；若已加载则一并渲染
+        if (window.MAG_TOPBAR) {
+          try { MAG_TOPBAR.render(ctx); } catch (e) { /* 容错 */ }
+        }
         return ctx;
       });
     }

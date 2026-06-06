@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/admin/css/style.css">
   <script src="/admin/js/auth.js"></script>
   <script src="/admin/js/nav.js"></script>
+  <script src="/admin/js/topbar.js"></script>
 </head>
 <body>
   <script>MAG_AUTH.requireAuth();</script>
@@ -106,6 +107,8 @@
       } else {
         window.__isOwner = false;
       }
+      // 把当前 tenant slug 同步给下面的渲染逻辑（预览链接用）
+      window.__tenantSlug = (ctx && ctx.tenant && ctx.tenant.slug) || 'zhuobao';
     });
   </script>
   <script>
@@ -143,7 +146,7 @@
           <td>${formatDate(m.upload_date)}</td>
           <td><span class="status-badge ${m.enabled ? 'status-enabled' : 'status-disabled'}">${m.enabled ? '启用' : '停用'}</span></td>
           <td>
-            <a href="${location.protocol}//${location.hostname}:50020/reader/viewer.html?id=${m.id}&t=zhuobao" target="_blank" class="btn btn-sm btn-primary" title="在阅读端新窗口打开">预览</a>
+            <a href="../reader/viewer.html?id=${m.id}&t=${window.__tenantSlug || 'zhuobao'}" target="_blank" class="btn btn-sm btn-primary" title="在阅读端新窗口打开">预览</a>
             ${state.isOwner ? `
             <a href="/admin/magazine/edit.html?id=${m.id}" class="btn btn-sm btn-secondary">编辑</a>
             <button class="btn btn-sm btn-danger" onclick="deleteMagazine(${m.id})">删除</button>
