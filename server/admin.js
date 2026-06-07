@@ -393,6 +393,40 @@ app.put('/api/admin/branding', auth.requireRole('owner'), upload.single('logo'),
   });
 });
 
+// ========== Reader 端共享链接（v5：reader 端 URL 鉴权 secret） ==========
+// Public 端 reader 端实际监听端口（供 link 生成用；硬编码为规格约定的 50100）
+const READER_PUBLIC_PORT = 50100;
+
+function buildReaderLink(req, tenant) {
+  const hostname = (req.get('host') || '').split(':')[0] || 'localhost';
+  return `http://${hostname}:${READER_PUBLIC_PORT}/?t=${tenant.slug}&s=${tenant.reader_secret}`;
+}
+
+app.get('/api/admin/tenant/reader-secret', auth.requireRole('owner'), (req, res) => {
+  const t = db.getTenant(req.tenant.id);
+  if (!t) return res.status(404).json({ error: '租户不存在' });
+  res.json({
+    secret: t.reader_secret || null,
+    link: t.reader_secret ? buildReaderLink(req, t) : null,
+    created_at: t.reader_secret_created_at || null,
+    updated_at: t.reader_secret_updated_at || null
+  });
+});
+
+app.post('/api/admin/tenant/reader-secret/regenerate', auth.requireRole('owner'), (req, res) => {
+  const t = db.getTenant(req.tenant.id);
+  if (!t) return res.status(404).json({ error: '租户不存在' });
+  const newSecret = db.generateReaderSecret();
+  const updated = db.setTenantReaderSecret(t.id, newSecret);
+  auth.audit(req, 'regenerate_reader_secret', { target_type: 'tenant', target_id: t.id, details: { slug: t.slug } });
+  res.json({
+    secret: updated.reader_secret,
+    link: buildReaderLink(req, updated),
+    created_at: updated.reader_secret_created_at,
+    updated_at: updated.reader_secret_updated_at
+  });
+});
+
 // ========== Reader 端分析（看板） ==========
 app.get('/api/admin/analytics', auth.requireAuth, (req, res) => {
   const since = req.query.since || new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();

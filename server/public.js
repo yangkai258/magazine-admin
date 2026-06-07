@@ -1,5 +1,7 @@
 // 公共阅读端 + 自助注册 + 公开 API
 // 默认 port 50020，可由 PUBLIC_PORT env 覆盖
+// v5：reader 端 URL 鉴权（?t=<slug>&s=<secret>），所有 /api/public/* 需要 secret
+//     开放：plans / signup / signup-verify
 const express = require('express');
 const path = require('path');
 const db = require('./db/init');
@@ -13,19 +15,91 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.get('/', (req, res) => res.redirect('/splash.html'));
 
-// ========== 公共读 API（多租户 SaaS） ==========
+// ========== Reader Secret 鉴权 (v5) ==========
+// 从 header / query 拿 secret；header 优先
+function extractReaderSecret(req) {
+  return (req.get('X-Reader-Secret') || req.query.secret || '').trim() || null;
+}
+
+// 用 secret 找匹配的非 suspended tenant；找不到返回 null
+function findTenantBySecret(secret) {
+  if (!secret) return null;
+  return (db.getAllTenants() || []).find(t => t.reader_secret === secret && !t.suspended) || null;
+}
+
+// 校验 secret；缺/错 → 401。中间件式。
+// 模式 A：有具体 slug（path 或 query）→ secret 必须 match 那个 slug
+// 模式 B：无 slug（list/data）→ secret 必须 match 任意 tenant（返回该 tenant 供后续使用）
+function requireReaderAuth(req, res, slug) {
+  const secret = extractReaderSecret(req);
+  if (!secret) {
+    return res.status(401).json({ error: 'invalid_secret', message: '缺少 X-Reader-Secret header 或 ?secret= query' });
+  }
+  const tenant = findTenantBySecret(secret);
+  if (!tenant) {
+    return res.status(401).json({ error: 'invalid_secret', message: 'secret 不匹配任何 tenant' });
+  }
+  if (slug && tenant.slug !== slug) {
+    return res.status(401).json({ error: 'invalid_secret', message: 'secret 与 slug 不匹配' });
+  }
+  return null;  // 鉴权通过；用 req._readerTenant 拿当前 tenant
+}
+
+// 给 list / data 端点用：secret 必须 match 某个 tenant，并把 tenant 挂到 req
+function requireReaderAuthAttach(req, res) {
+  const secret = extractReaderSecret(req);
+  if (!secret) {
+    return res.status(401).json({ error: 'invalid_secret' });
+  }
+  const tenant = findTenantBySecret(secret);
+  if (!tenant) {
+    return res.status(401).json({ error: 'invalid_secret' });
+  }
+  req._readerTenant = tenant;
+  return null;
+}
+
+// 静默鉴权：失败不返 401，只返 { success: false }，不泄漏信息给爬虫
+function requireReaderAuthSilent(req, res) {
+  const secret = extractReaderSecret(req);
+  const tenant = secret ? findTenantBySecret(secret) : null;
+  return { secret, tenant };
+}
+
+// ========== 公共读 API（多租户 SaaS，需要 reader secret） ==========
+// /api/public/data?slug=<slug>&secret=<secret>  或  ?slug=<slug> + X-Reader-Secret header
+// 不带 slug → 401；缺/错 secret → 401；通过 → 该租户的快照
 app.get('/api/public/data', (req, res) => {
+  if (requireReaderAuthAttach(req, res)) return;
+  const tenant = req._readerTenant;
+  const slug = (req.query.slug || '').trim();
+  // 没传 slug：默认就用 secret 自己的 tenant（最常见用法）
+  if (slug && slug !== tenant.slug) {
+    return res.status(401).json({ error: 'invalid_secret', message: 'slug 与 secret 不匹配' });
+  }
   res.set('Cache-Control', 'no-cache, must-revalidate');
-  res.json(db.snapshotForPublish());
+  res.json(db.snapshotForPublish({ tenantId: tenant.id }));
 });
 
+// /api/public/tenants?slug=<slug>&secret=<secret>  或  ?slug=<slug> + header
+// 缺 slug 或 缺/错 secret → 401；通过 → 单租户
 app.get('/api/public/tenants', (req, res) => {
-  res.json((db.getAllTenants() || []).filter(t => !t.suspended).map(t => ({
-    id: t.id, slug: t.slug, name: t.name, logo_url: t.logo_url, primary_color: t.primary_color
-  })));
+  if (requireReaderAuthAttach(req, res)) return;
+  const tenant = req._readerTenant;
+  const slug = (req.query.slug || '').trim();
+  if (slug && slug !== tenant.slug) {
+    return res.status(401).json({ error: 'invalid_secret', message: 'slug 与 secret 不匹配' });
+  }
+  // 响应不包含 reader_secret
+  res.json([{
+    id: tenant.id, slug: tenant.slug, name: tenant.name,
+    logo_url: tenant.logo_url || '',
+    primary_color: tenant.primary_color || '#4f46e5'
+  }]);
 });
 
 app.get('/api/public/tenants/:slug/magazines', (req, res) => {
+  if (requireReaderAuth(req, res, req.params.slug)) return;
   const tenant = db.getTenantBySlug(req.params.slug);
   if (!tenant) return res.status(404).json({ error: 'tenant not found' });
   const { enabled } = req.query;
@@ -34,6 +108,7 @@ app.get('/api/public/tenants/:slug/magazines', (req, res) => {
 });
 
 app.get('/api/public/tenants/:slug/magazines/:id', (req, res) => {
+  if (requireReaderAuth(req, res, req.params.slug)) return;
   const tenant = db.getTenantBySlug(req.params.slug);
   if (!tenant) return res.status(404).json({ error: 'tenant not found' });
   const magazine = db.getMagazine(req.params.id, { tenantId: tenant.id });
@@ -43,6 +118,7 @@ app.get('/api/public/tenants/:slug/magazines/:id', (req, res) => {
 });
 
 app.get('/api/public/tenants/:slug/cover', (req, res) => {
+  if (requireReaderAuth(req, res, req.params.slug)) return;
   const tenant = db.getTenantBySlug(req.params.slug);
   if (!tenant) return res.status(404).json({ error: 'tenant not found' });
   const { type } = req.query;
@@ -52,14 +128,14 @@ app.get('/api/public/tenants/:slug/cover', (req, res) => {
   res.json(candidates[0]);
 });
 
-// ========== 公开 Plans（注册页用） ==========
+// ========== 公开 Plans（注册页用，无需 secret） ==========
 app.get('/api/public/plans', (req, res) => {
   res.json(db.getAllPlans().map(p => ({
     id: p.id, slug: p.slug, name: p.name, price_monthly_cny: p.price_monthly_cny, features: p.features
   })));
 });
 
-// ========== 自助注册（无需鉴权） ==========
+// ========== 自助注册（无需 secret） ==========
 app.post('/api/public/signup', async (req, res) => {
   const { email, tenant_slug, tenant_name, plan_id } = req.body || {};
   if (!email || !tenant_slug || !tenant_name) return res.status(400).json({ error: 'email / tenant_slug / tenant_name 必填' });
@@ -101,13 +177,17 @@ app.get('/api/public/signup/verify', (req, res) => {
   });
 });
 
-// ========== Reader 端埋点（公开） ==========
+// ========== Reader 端埋点（v5：body 加 secret 字段，静默校验） ==========
+// 失败 → silently 返回 200 { success: false }（不返 401，不泄漏信息给爬虫）
 app.post('/api/public/analytics/track', (req, res) => {
-  const { tenant_slug, magazine_id, page_id, viewer_id, event_type, page_number, duration_ms } = req.body || {};
-  if (!tenant_slug || !event_type) return res.status(400).json({ error: 'tenant_slug 和 event_type 必填' });
+  const { tenant_slug, secret, magazine_id, page_id, viewer_id, event_type, page_number, duration_ms } = req.body || {};
+  // 静默鉴权：secret 缺/错/不匹配该 tenant → 直接返 success: false（不写入）
+  if (!tenant_slug || !secret) return res.json({ success: false });
   const tenant = db.getTenantBySlug(tenant_slug);
-  if (!tenant || tenant.suspended) return res.status(404).json({ error: 'tenant not found' });
-  if (!['view', 'dwell', 'complete'].includes(event_type)) return res.status(400).json({ error: 'event_type 必须是 view/dwell/complete' });
+  if (!tenant || tenant.suspended) return res.json({ success: false });
+  if (tenant.reader_secret !== secret) return res.json({ success: false });
+  if (!event_type) return res.json({ success: false });
+  if (!['view', 'dwell', 'complete'].includes(event_type)) return res.json({ success: false });
   db.addReaderEvent({
     tenant_id: tenant.id,
     magazine_id,

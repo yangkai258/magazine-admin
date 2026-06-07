@@ -676,7 +676,7 @@
     {
       "id": 1,
       "slug": "zhuobao",
-      "name": "卓宝人",
+      "name": "卓宝科技",
       "created_at": "2026-06-05T04:14:22.292Z",
       "is_platform_admin": true,
       "suspended": false,
@@ -684,7 +684,10 @@
       "primary_color": "#2563eb",
       "plan_id": 1,
       "subscription_status": "active",
-      "trial_ends_at": null
+      "trial_ends_at": null,
+      "reader_secret": "BhcOtjgXzfZ-Mzllk54TJm-qlQeCLGoT",
+      "reader_secret_created_at": "2026-06-07T15:10:41.224Z",
+      "reader_secret_updated_at": "2026-06-07T15:18:17.496Z"
     },
     {
       "id": 2,
@@ -698,12 +701,15 @@
       "primary_color": "#4f46e5",
       "plan_id": 1,
       "subscription_status": "active",
-      "trial_ends_at": null
+      "trial_ends_at": null,
+      "reader_secret": "6DUgt8SXHytlhkQK_hK1nCRLQ_AW12uy",
+      "reader_secret_created_at": "2026-06-07T15:10:41.224Z",
+      "reader_secret_updated_at": "2026-06-07T15:10:41.224Z"
     }
   ],
   "_meta": {
-    "schema_version": 4,
-    "migrated_at": "2026-06-05T08:54:49.723Z"
+    "schema_version": 5,
+    "migrated_at": "2026-06-07T15:10:41.224Z"
   },
   "audit_log": [
     {
@@ -879,6 +885,78 @@
       },
       "ip": "::1",
       "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    {
+      "id": 12,
+      "timestamp": "2026-06-07T05:18:40.457Z",
+      "actor_user_id": 1,
+      "actor_user_email": "admin@zhuobao.local",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "actor_role": "owner",
+      "tenant_id": 1,
+      "action": "update_tenant",
+      "target_type": "tenant",
+      "target_id": 1,
+      "details": [
+        "name"
+      ],
+      "ip": "::1",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    {
+      "id": 13,
+      "timestamp": "2026-06-07T15:08:37.448Z",
+      "actor_user_id": 1,
+      "actor_user_email": "admin@zhuobao.local",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "actor_role": "owner",
+      "tenant_id": 1,
+      "action": "login",
+      "target_type": null,
+      "target_id": null,
+      "details": null,
+      "ip": "::1",
+      "user_agent": "curl/8.19.0"
+    },
+    {
+      "id": 14,
+      "timestamp": "2026-06-07T15:18:17.480Z",
+      "actor_user_id": 1,
+      "actor_user_email": "admin@zhuobao.local",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "actor_role": "owner",
+      "tenant_id": 1,
+      "action": "login",
+      "target_type": null,
+      "target_id": null,
+      "details": null,
+      "ip": "::ffff:127.0.0.1",
+      "user_agent": null
+    },
+    {
+      "id": 15,
+      "timestamp": "2026-06-07T15:18:17.494Z",
+      "actor_user_id": 1,
+      "actor_user_email": "admin@zhuobao.local",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": true,
+      "actor_role": "owner",
+      "tenant_id": 1,
+      "action": "regenerate_reader_secret",
+      "target_type": "tenant",
+      "target_id": 1,
+      "details": {
+        "slug": "zhuobao"
+      },
+      "ip": "::ffff:127.0.0.1",
+      "user_agent": null
     }
   ],
   "users": [
@@ -891,7 +969,7 @@
       "name": "卓宝人管理员",
       "status": "active",
       "created_at": "2026-06-05T08:54:49.721Z",
-      "last_login_at": "2026-06-05T11:07:07.080Z"
+      "last_login_at": "2026-06-07T15:18:17.478Z"
     }
   ],
   "plans": [
@@ -1032,6 +1110,32 @@
       "referrer": "http://localhost:50100/reader/viewer.html?id=1&t=zhuobao",
       "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
       "ts": "2026-06-05T11:05:31.807Z"
+    },
+    {
+      "id": 8,
+      "tenant_id": 1,
+      "magazine_id": null,
+      "page_id": null,
+      "viewer_id": "::ffff:127.0.0.1",
+      "event_type": "view",
+      "page_number": null,
+      "duration_ms": null,
+      "referrer": null,
+      "user_agent": null,
+      "ts": "2026-06-07T15:14:43.588Z"
+    },
+    {
+      "id": 9,
+      "tenant_id": 1,
+      "magazine_id": null,
+      "page_id": null,
+      "viewer_id": "::ffff:127.0.0.1",
+      "event_type": "view",
+      "page_number": null,
+      "duration_ms": null,
+      "referrer": null,
+      "user_agent": null,
+      "ts": "2026-06-07T15:16:40.063Z"
     }
   ],
   "signup_tokens": [],

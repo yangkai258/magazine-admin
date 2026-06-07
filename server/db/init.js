@@ -20,7 +20,7 @@ const defaultData = {
   password_reset_tokens: [],
   email_log: [],
   user_invitations: [],
-  _meta: { schema_version: 4 }
+  _meta: { schema_version: 5 }
 };
 
 let data = loadData();
@@ -49,6 +49,8 @@ function loadData() {
       ];
       requiredArrays.forEach(k => { if (!parsed[k]) parsed[k] = []; });
       // 兼容老 tenants 缺字段
+      let needsSave = false;
+      const nowIso = new Date().toISOString();
       parsed.tenants.forEach(t => {
         if (t.is_platform_admin === undefined) t.is_platform_admin = false;
         if (t.suspended === undefined) t.suspended = false;
@@ -57,9 +59,26 @@ function loadData() {
         if (t.plan_id === undefined) t.plan_id = null;
         if (t.subscription_status === undefined) t.subscription_status = 'active';
         if (t.trial_ends_at === undefined) t.trial_ends_at = null;
+        // v5：reader_secret（老 tenant 缺字段就生成并立即持久化，保证 server 重启后 link 仍可用）
+        if (!t.reader_secret) {
+          t.reader_secret = generateReaderSecret();
+          t.reader_secret_created_at = t.reader_secret_created_at || nowIso;
+          t.reader_secret_updated_at = t.reader_secret_updated_at || nowIso;
+          needsSave = true;
+        }
       });
       // 缺 _meta
-      if (!parsed._meta) parsed._meta = { schema_version: 3, migrated_at: new Date().toISOString() };
+      if (!parsed._meta) parsed._meta = { schema_version: 3, migrated_at: nowIso };
+      // v5：升 schema_version（v4 → v5）
+      if (!parsed._meta.schema_version || parsed._meta.schema_version < 5) {
+        parsed._meta.schema_version = 5;
+        parsed._meta.migrated_at = nowIso;
+        needsSave = true;
+      }
+      // 立即持久化 backfill 的 reader_secret / schema_version（避免重启后重新生成，破坏 link 稳定性）
+      if (needsSave) {
+        try { fs.writeFileSync(dataPath, JSON.stringify(parsed, null, 2), 'utf8'); } catch (e) { console.error('loadData persist error:', e.message); }
+      }
       return parsed;
     }
   } catch (e) { console.error('loadData error:', e.message); }
@@ -82,6 +101,11 @@ function randomToken(bytes = 32) {
   return crypto.randomBytes(bytes).toString('hex');
 }
 
+// v5：reader 端鉴权 secret。32 字符 base64url，24 字节熵
+function generateReaderSecret() {
+  return crypto.randomBytes(24).toString('base64url');
+}
+
 function hashPassword(password) {
   // 简化：SHA-256 + salt（生产环境应该用 bcrypt/argon2）
   const salt = 'mag-static-salt-v4';
@@ -93,9 +117,10 @@ function getAllTenants() { return (data.tenants || []).slice().sort((a, b) => a.
 function getTenant(id) { return (data.tenants || []).find(t => t.id === Number(id)); }
 function getTenantBySlug(slug) { return (data.tenants || []).find(t => t.slug === slug); }
 
-function createTenant({ slug, name, logo_url, primary_color, plan_id }) {
+function createTenant({ slug, name, logo_url, primary_color, plan_id, reader_secret }) {
   if (!slug || !name) throw new Error('slug and name are required');
   if (getTenantBySlug(slug)) throw new Error(`tenant slug '${slug}' already exists`);
+  const nowIso = new Date().toISOString();
   const tenant = {
     id: nextId(data.tenants),
     slug, name,
@@ -107,7 +132,11 @@ function createTenant({ slug, name, logo_url, primary_color, plan_id }) {
     subscription_status: 'active',
     trial_ends_at: null,
     password: '',  // 老字段保留：tenant-level fallback 密码（不推荐用，新流程走 user）
-    created_at: new Date().toISOString()
+    // v5：reader 端 URL 鉴权 secret；不传则自动生成
+    reader_secret: reader_secret || generateReaderSecret(),
+    reader_secret_created_at: nowIso,
+    reader_secret_updated_at: nowIso,
+    created_at: nowIso
   };
   data.tenants.push(tenant);
   saveData();
@@ -128,6 +157,21 @@ function updateTenant(id, fields) {
 }
 
 function setTenantSuspended(id, suspended) { return updateTenant(id, { suspended: !!suspended }); }
+
+// v5：reader 端 URL secret（admin 内部用，不通过 public API 暴露）
+function setTenantReaderSecret(id, secret) {
+  const nowIso = new Date().toISOString();
+  return updateTenant(id, {
+    reader_secret: secret,
+    reader_secret_updated_at: nowIso
+  });
+}
+
+function getReaderSecret(tenantId) {
+  const t = getTenant(tenantId);
+  return t ? (t.reader_secret || null) : null;
+}
+
 function deleteTenant(id) {
   const tid = Number(id);
   if (!(data.tenants || []).find(t => t.id === tid)) return false;
@@ -647,19 +691,22 @@ function getTenantUsage(tenantId) {
   };
 }
 
-function snapshotForPublish() {
+function snapshotForPublish({ tenantId } = {}) {
+  // 公共发布快照：tenant 字段**绝不**包含 reader_secret（防泄漏）
+  const stripTenant = (t) => ({
+    id: t.id, slug: t.slug, name: t.name,
+    logo_url: t.logo_url || '',
+    primary_color: t.primary_color || '#4f46e5'
+  });
+  const matchesTenant = (id) => tenantId === undefined || tenantId === null || Number(id) === Number(tenantId);
   return {
     tenants: (data.tenants || [])
-      .filter(t => !t.suspended)
-      .map(t => ({
-        id: t.id, slug: t.slug, name: t.name,
-        logo_url: t.logo_url || '',
-        primary_color: t.primary_color || '#4f46e5'
-      })),
+      .filter(t => !t.suspended && matchesTenant(t.id))
+      .map(stripTenant),
     magazines: data.magazines
       .filter(m => {
         const t = (data.tenants || []).find(x => x.id === m.tenant_id);
-        return t && !t.suspended;
+        return t && !t.suspended && matchesTenant(m.tenant_id);
       })
       .map(m => ({
         id: m.id, tenant_id: m.tenant_id, name: m.name,
@@ -670,13 +717,13 @@ function snapshotForPublish() {
     pages: data.pages
       .filter(p => {
         const t = (data.tenants || []).find(x => x.id === p.tenant_id);
-        return t && !t.suspended;
+        return t && !t.suspended && matchesTenant(p.tenant_id);
       })
       .map(p => ({ id: p.id, tenant_id: p.tenant_id, magazine_id: p.magazine_id, page_order: p.page_order, image_path: p.image_path, created_at: p.created_at })),
     covers: data.covers
       .filter(c => {
         const t = (data.tenants || []).find(x => x.id === c.tenant_id);
-        return t && !t.suspended;
+        return t && !t.suspended && matchesTenant(c.tenant_id);
       })
       .map(c => ({ id: c.id, tenant_id: c.tenant_id, magazine_id: c.magazine_id, type: c.type, image_path: c.image_path, created_at: c.created_at }))
   };
@@ -685,6 +732,8 @@ function snapshotForPublish() {
 module.exports = {
   // tenants
   getAllTenants, getTenant, getTenantBySlug, createTenant, updateTenant, setTenantSuspended, deleteTenant,
+  // v5: reader secret
+  setTenantReaderSecret, getReaderSecret, generateReaderSecret,
   // users (v4)
   getAllUsers, getUser, getUserByEmail, createUser, updateUser, setUserPassword, deleteUser, verifyUserPassword,
   // plans / subs / invoices (v4)
