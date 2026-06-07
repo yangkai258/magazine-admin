@@ -16,17 +16,18 @@
   'use strict';
 
   // 单一权威 nav 列表 —— 任何页面都展示这 10 项，按角色隐藏
+  // icon 字段是 Lucide 图标名（https://lucide.dev），前端在 nav-icon span 上用 data-lucide
   var ITEMS = [
-    { key: 'dashboard',     icon: '📊', label: '总览',       href: '/admin/' },
-    { key: 'magazine',      icon: '📖', label: '杂志管理',   href: '/admin/magazine/list.html' },
-    { key: 'cover',         icon: '🖼', label: '封面管理',   href: '/admin/cover/list.html' },
-    { key: 'branding',      icon: '🎨', label: '品牌定制',   href: '/admin/branding.html' },
-    { key: 'analytics',     icon: '📈', label: '阅读分析',   href: '/admin/analytics.html' },
-    { key: 'billing',       icon: '💳', label: '订阅与计费', href: '/admin/billing.html',        role: 'owner' },
-    { key: 'platform',      icon: '🏢', label: '平台管理',   href: '/admin/platform.html',       role: 'platform' },
-    { key: 'audit',         icon: '📋', label: '审计日志',   href: '/admin/audit.html',          role: 'platform' },
-    { key: 'email-log',     icon: '📧', label: '邮件日志',   href: '/admin/email-log.html',      role: 'platform' },
-    { key: 'tenant-users',  icon: '👥', label: '用户管理',   href: '/admin/tenant-users.html',   role: 'owner' }
+    { key: 'dashboard',     icon: 'layout-dashboard', label: '总览',       href: '/admin/' },
+    { key: 'magazine',      icon: 'book-open',        label: '杂志管理',   href: '/admin/magazine/list.html' },
+    { key: 'cover',         icon: 'image',            label: '封面管理',   href: '/admin/cover/list.html' },
+    { key: 'branding',      icon: 'palette',          label: '品牌定制',   href: '/admin/branding.html' },
+    { key: 'analytics',     icon: 'bar-chart-3',      label: '阅读分析',   href: '/admin/analytics.html' },
+    { key: 'billing',       icon: 'credit-card',      label: '订阅与计费', href: '/admin/billing.html',        role: 'owner' },
+    { key: 'platform',      icon: 'building-2',       label: '平台管理',   href: '/admin/platform.html',       role: 'platform' },
+    { key: 'audit',         icon: 'scroll-text',      label: '审计日志',   href: '/admin/audit.html',          role: 'platform' },
+    { key: 'email-log',     icon: 'mail',             label: '邮件日志',   href: '/admin/email-log.html',      role: 'platform' },
+    { key: 'tenant-users',  icon: 'users-round',      label: '用户管理',   href: '/admin/tenant-users.html',   role: 'owner' }
   ];
 
   function escapeHtml(s) {
@@ -54,13 +55,13 @@
       var cls = 'nav-item';
       var isActive = (it.key === active);
       if (isActive) cls += ' active';
-      // 激活项：如果租户有上传 logo，替换 nav-icon emoji 为 .sidebar-logo-img
-      // 否则保留原 emoji
+      // 激活项：如果租户有上传 logo，替换 nav-icon 为品牌 logo img
+      // 否则用 Lucide 图标（data-lucide，nav.js 加载完后会替换为 <svg>）
       var iconHtml;
       if (isActive && activeLogoUrl) {
         iconHtml = '<img class="sidebar-logo-img nav-active-logo" src="' + escapeHtml(activeLogoUrl) + '" alt="' + escapeHtml(activeLogoAlt) + '">';
       } else {
-        iconHtml = '<span class="nav-icon">' + escapeHtml(it.icon) + '</span>';
+        iconHtml = '<i class="nav-icon" data-lucide="' + escapeHtml(it.icon) + '"></i>';
       }
       return '<a href="' + escapeHtml(it.href) + '" class="' + cls + '" data-page="' + escapeHtml(it.key) + '">' +
              iconHtml + ' ' +

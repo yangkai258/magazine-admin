@@ -913,9 +913,11 @@
       }
 
       // 平台管理员：拉所有租户列表（用于切换器）
+      // 注：之前用 /api/public/tenants，但那条只在 public port (50100) 上注册；
+      //     admin port (50120) 没那条路由，404。改用 /api/admin/tenants（admin port + 平台 admin 鉴权 + 全字段）
       if (me.is_platform_admin) {
         try {
-          var all = await fetch('/api/public/tenants', { credentials: 'same-origin' }).then(function(r) { return r.json(); });
+          var all = await api.get('/admin/tenants');
           state.allTenants = all || [];
         } catch (e) {
           state.allTenants = [me];
