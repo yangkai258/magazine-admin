@@ -30,7 +30,7 @@
   }
 
   // 侧边栏富 logo HTML（其他页只有文本 .sidebar-logo 时替换）
-  // 元素顺序：上传 logo img（若 tenant.logo_url 存在）→ fallback 首字 → 名字 → 副标
+  // 元素：fallback 首字 + 名字 + 副标 —— 永远只显示 fallback（首字），不渲染上传的图片
   function buildRichSidebarLogo(tenant) {
     var name = escapeHtml(tenant.name || '杂志管理平台');
     var slug = escapeHtml(tenant.slug || '');
@@ -39,13 +39,8 @@
       ? '👑 平台管理员 · SaaS · v4'
       : ('租户 · ' + slug);
     var initial = (name && name.length) ? name.charAt(0) : '📚';
-    var logoUrl = tenant.logo_url || '';
-    var imgHtml = logoUrl
-      ? '<img class="sidebar-logo-img" src="' + escapeHtml(logoUrl) + '" alt="' + escapeHtml(name) + '">'
-      : '';
     return (
       '<div class="sidebar-logo" id="sidebarLogo">' +
-        imgHtml +
         '<div class="sidebar-logo-fallback" id="sidebarLogoFallback">' + escapeHtml(initial) + '</div>' +
         '<div style="min-width:0">' +
           '<div class="sidebar-logo-text" id="sidebarLogoText">' + name + '</div>' +
@@ -101,27 +96,7 @@
       subEl.textContent = sub;
     }
     if (fbEl && tenant.name) fbEl.textContent = tenant.name.charAt(0);
-
-    // 注入/更新 logo img：brandings.html 上传的 logo
-    var logoWrap = document.getElementById('sidebarLogo');
-    if (logoWrap) {
-      var oldImg = logoWrap.querySelector('img.sidebar-logo-img');
-      if (oldImg) oldImg.remove();
-      if (tenant.logo_url) {
-        var img = document.createElement('img');
-        img.className = 'sidebar-logo-img';
-        img.src = tenant.logo_url;
-        img.alt = tenant.name || 'logo';
-        // img 加载失败就移除，让 fallback 首字显示
-        img.onerror = function () { img.remove(); if (fbEl) fbEl.style.display = ''; };
-        // 放在 fallback 之前
-        logoWrap.insertBefore(img, fbEl);
-        if (fbEl) fbEl.style.display = 'none';
-      } else if (fbEl) {
-        // 没 logo_url，fallback 显示
-        fbEl.style.display = '';
-      }
-    }
+    // 注：永远只显示 fallback（首字），不渲染上传的图片
   }
 
   function populateTopbarUserInfo(user) {
