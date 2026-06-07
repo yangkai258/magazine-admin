@@ -180,6 +180,15 @@
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
+    function escapeAttr(s) {
+      // 转义 HTML 属性值里可能闭合属性的字符
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;');
+    }
     function formatTimestamp(iso) {
       if (!iso) return '-';
       const d = new Date(iso);

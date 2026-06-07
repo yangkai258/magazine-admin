@@ -842,6 +842,10 @@
         } catch (e) { /* ignore */ }
         render();
         toast('已保存。阅读端刷新即生效。', 'success');
+        // 恢复按钮状态（成功路径不 catch，所以这里手动重置）
+        var saveBtn = document.getElementById('saveBtn');
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 保存';
       } catch (e) {
         var msg = (e && e.message) || '保存失败';
         if (/403|ROLE_REQUIRED|owner/.test(msg)) {

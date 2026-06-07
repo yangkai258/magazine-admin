@@ -230,12 +230,12 @@
       var dimOK = await new Promise(function(resolve) {
         var img = new Image();
         img.onload = function() {
-          var w = $w = img.naturalWidth, h = img.naturalHeight;
+          var w = img.naturalWidth, h = img.naturalHeight;
           var ratio = w / h;
           var expected = spec.ratio;
           var diff = Math.abs(ratio - expected) / expected;
-          // 允许 ±20% 比例偏差（兼容横向/竖向的微调）
-          var ok = diff <= 0.2;
+          // 偏差 > 50% 才认为比例错误（之前 20% 太严）
+          var ok = diff <= 0.5;
           resolve({ ok: ok, w: w, h: h, ratio: ratio, expected: expected, diff: diff });
         };
         img.onerror = function() { resolve({ ok: null }); };
@@ -244,12 +244,10 @@
 
       var warn = document.getElementById('specWarning');
       if (dimOK.ok === false) {
-        var msg = '⚠ 尺寸 ' + dimOK.w + ' × ' + dimOK.h +
-                  ' (宽高比 ' + (dimOK.w / dimOK.h).toFixed(2) +
-                  ':1) 跟推荐 ' + spec.ratioLabel + ' 偏差 ' + (dimOK.diff * 100).toFixed(0) + '%，可能铺满效果不佳';
+        // 偏差 > 50% 才提示（之前是 20% 太严，1920×1080 推荐但 1440×720 也会警告，用户困惑）
+        var msg = '⚠ 图片宽高比偏差较大 (' + (dimOK.diff * 100).toFixed(0) + '%)，建议接近 ' + spec.ratioLabel + '。但仍可上传。';
         warn.textContent = msg;
         warn.classList.add('show');
-        toast('尺寸不匹配，已提示。继续上传将无视此警告。', 'error');
       } else if (dimOK.ok === true) {
         warn.classList.remove('show');
       } else {
