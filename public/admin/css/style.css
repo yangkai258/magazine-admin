@@ -18,21 +18,21 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); font-size: 16px; }
 
 .admin-layout { display: flex; min-height: 100vh; }
 
 /* Sidebar */
 .sidebar { width: var(--sidebar-w); background: #1e1b4b; color: #fff; position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; z-index: 100; }
 /* 富 logo（topbar.js 渲染或 index.html 内联）：logo + 名字 + 副标 */
-.sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 18px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-.sidebar-logo-img { width: 32px; height: 32px; border-radius: 6px; object-fit: contain; background: rgba(255,255,255,0.08); flex-shrink: 0; }
-.sidebar-logo-fallback { width: 32px; height: 32px; border-radius: 6px; background: rgba(255,255,255,0.1); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-.sidebar-logo-text { font-size: 14px; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
-.sidebar-logo-sub { font-size: 10px; font-weight: 400; color: rgba(255,255,255,0.5); margin-top: 2px; letter-spacing: 0.5px; }
+.sidebar-logo { display: flex; align-items: center; gap: 14px; padding: 20px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.sidebar-logo-img { width: 64px; height: 64px; border-radius: 12px; object-fit: contain; background: rgba(255,255,255,0.08); flex-shrink: 0; }
+.sidebar-logo-fallback { width: 64px; height: 64px; border-radius: 12px; background: rgba(255,255,255,0.1); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; flex-shrink: 0; }
+.sidebar-logo-text { font-size: 16px; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
+.sidebar-logo-sub { font-size: 11px; font-weight: 400; color: rgba(255,255,255,0.5); margin-top: 2px; letter-spacing: 0.5px; }
 .sidebar-nav { flex: 1; padding: 12px 8px; }
 /* nav-icon：Lucide 渲染成 <svg>，统一尺寸 */
-.nav-icon { width: 16px; height: 16px; flex-shrink: 0; stroke-width: 2; vertical-align: middle; }
+.nav-icon { width: 20px; height: 20px; flex-shrink: 0; stroke-width: 2; vertical-align: middle; }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; color: rgba(255,255,255,0.7); text-decoration: none; font-size: 14px; transition: all 0.2s; margin-bottom: 4px; }
 .nav-item:hover, .nav-item.active { background: rgba(255,255,255,0.1); color: #fff; }
 
