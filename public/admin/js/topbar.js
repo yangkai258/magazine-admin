@@ -30,7 +30,7 @@
   }
 
   // 侧边栏富 logo HTML（其他页只有文本 .sidebar-logo 时替换）
-  // 注：只显示「首字 + 名字 + 副标」，不渲染上传图片（32x32 容易糊）
+  // 元素顺序：上传 logo img（若 tenant.logo_url 存在）→ fallback 首字 → 名字 → 副标
   function buildRichSidebarLogo(tenant) {
     var name = escapeHtml(tenant.name || '杂志管理平台');
     var slug = escapeHtml(tenant.slug || '');
@@ -39,8 +39,13 @@
       ? '👑 平台管理员 · SaaS · v4'
       : ('租户 · ' + slug);
     var initial = (name && name.length) ? name.charAt(0) : '📚';
+    var logoUrl = tenant.logo_url || '';
+    var imgHtml = logoUrl
+      ? '<img class="sidebar-logo-img" src="' + escapeHtml(logoUrl) + '" alt="' + escapeHtml(name) + '">'
+      : '';
     return (
       '<div class="sidebar-logo" id="sidebarLogo">' +
+        imgHtml +
         '<div class="sidebar-logo-fallback" id="sidebarLogoFallback">' + escapeHtml(initial) + '</div>' +
         '<div style="min-width:0">' +
           '<div class="sidebar-logo-text" id="sidebarLogoText">' + name + '</div>' +
@@ -97,9 +102,26 @@
     }
     if (fbEl && tenant.name) fbEl.textContent = tenant.name.charAt(0);
 
-    // 注：侧栏 logo 不渲染上传的图片 —— 统一只显示「租户名首字 + 租户名 + 副标」
-    // 原因：上传图片在小尺寸 (32x32) 下容易糊，文字 fallback 更清晰稳定
-    // 上传的 logo 仍保留在 data 里，branding 页可以预览/删除
+    // 注入/更新 logo img：brandings.html 上传的 logo
+    var logoWrap = document.getElementById('sidebarLogo');
+    if (logoWrap) {
+      var oldImg = logoWrap.querySelector('img.sidebar-logo-img');
+      if (oldImg) oldImg.remove();
+      if (tenant.logo_url) {
+        var img = document.createElement('img');
+        img.className = 'sidebar-logo-img';
+        img.src = tenant.logo_url;
+        img.alt = tenant.name || 'logo';
+        // img 加载失败就移除，让 fallback 首字显示
+        img.onerror = function () { img.remove(); if (fbEl) fbEl.style.display = ''; };
+        // 放在 fallback 之前
+        logoWrap.insertBefore(img, fbEl);
+        if (fbEl) fbEl.style.display = 'none';
+      } else if (fbEl) {
+        // 没 logo_url，fallback 显示
+        fbEl.style.display = '';
+      }
+    }
   }
 
   function populateTopbarUserInfo(user) {
@@ -222,6 +244,17 @@
       ensureRichSidebarLogo(tenant);
       // 顶栏只放 user info（推到右），不放租户徽章 —— 租户身份在侧栏已经有了
       injectUserInfoIfMissing(user);
+      // 异步拉 /api/admin/branding 拿最新值（不依赖 session 缓存）
+      // 用户改完品牌后，无需重新登录，刷新页面就生效
+      if (typeof api !== 'undefined' && api && api.get) {
+        api.get('/admin/branding').then(function (b) {
+          if (!b) return;
+          if (b.name) tenant.name = b.name;
+          if (b.logo_url !== undefined) tenant.logo_url = b.logo_url;
+          if (b.primary_color) tenant.primary_color = b.primary_color;
+          ensureRichSidebarLogo(tenant);
+        }).catch(function () { /* 容错：/me 数据已经够用 */ });
+      }
     }
   };
 })();

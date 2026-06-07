@@ -41,6 +41,10 @@
   function buildHtml(active, ctx) {
     var isPlatform = !!(ctx && ctx.tenant && ctx.tenant.is_platform_admin);
     var isOwner = !!(ctx && ctx.user && ctx.user.role === 'owner');
+    var tenant = (ctx && ctx.tenant) || {};
+    // 当前激活的菜单项：用品牌 logo 替换原 emoji，让「你在哪个租户」一眼可见
+    var activeLogoUrl = tenant.logo_url || '';
+    var activeLogoAlt = tenant.name || 'logo';
 
     return ITEMS.map(function (it) {
       // 角色过滤
@@ -48,9 +52,18 @@
       if (it.role === 'owner' && !isOwner) return '';
 
       var cls = 'nav-item';
-      if (it.key === active) cls += ' active';
+      var isActive = (it.key === active);
+      if (isActive) cls += ' active';
+      // 激活项：如果租户有上传 logo，替换 nav-icon emoji 为 .sidebar-logo-img
+      // 否则保留原 emoji
+      var iconHtml;
+      if (isActive && activeLogoUrl) {
+        iconHtml = '<img class="sidebar-logo-img nav-active-logo" src="' + escapeHtml(activeLogoUrl) + '" alt="' + escapeHtml(activeLogoAlt) + '">';
+      } else {
+        iconHtml = '<span class="nav-icon">' + escapeHtml(it.icon) + '</span>';
+      }
       return '<a href="' + escapeHtml(it.href) + '" class="' + cls + '" data-page="' + escapeHtml(it.key) + '">' +
-             '<span class="nav-icon">' + escapeHtml(it.icon) + '</span> ' +
+             iconHtml + ' ' +
              escapeHtml(it.label) +
              '</a>';
     }).join('\n        ');

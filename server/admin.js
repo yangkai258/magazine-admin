@@ -365,7 +365,14 @@ app.post('/api/payment/wechat/notify', (req, res) => {
 // ========== 租户品牌定制（owner 可改） ==========
 app.get('/api/admin/branding', auth.requireAuth, (req, res) => {
   const t = db.getTenant(req.tenant.id);
-  res.json({ logo_url: t.logo_url || '', primary_color: t.primary_color || '#4f46e5' });
+  // 注：name / slug 也返回，admin 各页（特别是侧栏 logo 块）拿最新值用，
+  //     不依赖 /api/auth/me 的 session 缓存（用户改完品牌要立刻见，不能要求重新登录）
+  res.json({
+    name: t.name || '',
+    slug: t.slug || '',
+    logo_url: t.logo_url || '',
+    primary_color: t.primary_color || '#4f46e5'
+  });
 });
 
 app.put('/api/admin/branding', auth.requireRole('owner'), upload.single('logo'), async (req, res) => {
@@ -379,7 +386,11 @@ app.put('/api/admin/branding', auth.requireRole('owner'), upload.single('logo'),
   }
   db.updateTenant(req.tenant.id, fields);
   auth.audit(req, 'update_branding', { details: { has_logo: !!req.file, primary_color: fields.primary_color } });
-  res.json({ logo_url: fields.logo_url || t.logo_url, primary_color: fields.primary_color || t.primary_color });
+  const t2 = db.getTenant(req.tenant.id);
+  res.json({
+    name: t2.name, slug: t2.slug,
+    logo_url: t2.logo_url || '', primary_color: t2.primary_color || '#4f46e5'
+  });
 });
 
 // ========== Reader 端分析（看板） ==========

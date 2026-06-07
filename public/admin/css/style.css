@@ -31,6 +31,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .sidebar-logo-text { font-size: 14px; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
 .sidebar-logo-sub { font-size: 10px; font-weight: 400; color: rgba(255,255,255,0.5); margin-top: 2px; letter-spacing: 0.5px; }
 .sidebar-nav { flex: 1; padding: 12px 8px; }
+/* 激活的菜单项里的租户品牌 logo —— 复用 sidebar-logo-img 样式但缩到 nav icon 尺寸 */
+.nav-active-logo { width: 20px !important; height: 20px !important; border-radius: 4px !important; background: rgba(255,255,255,0.15) !important; }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; color: rgba(255,255,255,0.7); text-decoration: none; font-size: 14px; transition: all 0.2s; margin-bottom: 4px; }
 .nav-item:hover, .nav-item.active { background: rgba(255,255,255,0.1); color: #fff; }
 .nav-icon { font-size: 16px; }
