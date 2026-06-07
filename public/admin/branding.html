@@ -377,6 +377,130 @@
       margin-top: 16px;
     }
     .info-strip-icon { font-size: 14px; flex-shrink: 0; }
+
+    /* ===== 阅读端分享链接 卡 ===== */
+    .reader-share-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .reader-share-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      min-width: 64px;
+      flex-shrink: 0;
+    }
+    .reader-share-value {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .reader-share-code {
+      flex: 1;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      background: #f3f4f6;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      min-width: 0;
+      word-break: break-all;
+      color: var(--text);
+    }
+    .reader-share-link-input {
+      flex: 1;
+      min-width: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #f9fafb;
+      color: var(--text-secondary);
+      outline: none;
+    }
+    .reader-share-link-input:focus { border-color: var(--primary); background: #fff; }
+
+    .reader-share-meta {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    .reader-share-meta code {
+      background: #f3f4f6;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+
+    .reader-share-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .reader-share-actions.hidden { display: none; }
+
+    .reader-share-warning {
+      display: flex;
+      gap: 6px;
+      align-items: flex-start;
+      padding: 8px 12px;
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #78350f;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .reader-share-noaccess {
+      padding: 14px 16px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #991b1b;
+      line-height: 1.6;
+    }
+    .reader-share-noaccess.hidden { display: none; }
+
+    .reader-share-loading {
+      padding: 14px 16px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .reader-share-loading.hidden { display: none; }
+
+    /* 只读 badge（平台管理员非 owner 视角）*/
+    .readonly-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      background: #f3f4f6;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-left: 6px;
+    }
+    .readonly-badge.hidden { display: none; }
+
+    /* 重新生成按钮单独左对齐 */
+    .reader-share-regen-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -438,7 +562,16 @@
       originalColor: '#4f46e5',
       originalLogo: '',
       me: null,
-      allTenants: []            // 平台管理员可见
+      allTenants: [],           // 平台管理员可见
+      currentRole: null,        // 当前登录 user 的角色（owner/editor/viewer）
+      // 阅读端分享链接
+      readerSecret: '',         // 32 字符 secret
+      readerSecretCreatedAt: '',
+      readerSecretUpdatedAt: '',
+      readerSecretShown: false, // true = 明文显示
+      readerSecretLoading: false,
+      readerSecretError: null,  // 'forbidden' | 'load' | null
+      readerSecretNoAccess: false  // 非 owner 看到的「权限不足」旗标
     };
 
     // ===== 无权限卡 =====
@@ -611,6 +744,138 @@
         + '</div>';
     }
 
+    // ===== 阅读端分享链接 卡 =====
+    // 拼出读者分享链接（用 window.location.hostname + MAG_PUBLIC_PORT 兜底）
+    function buildReaderShareLink(secret) {
+      if (!secret) return '';
+      var host = window.location.hostname || 'localhost';
+      var port = (window.MAG_PUBLIC_PORT != null) ? window.MAG_PUBLIC_PORT : 50100;
+      var slug = (state.me && state.me.slug) ? state.me.slug : '';
+      return 'http://' + host + ':' + port + '/?t=' + encodeURIComponent(slug) + '&s=' + encodeURIComponent(secret);
+    }
+
+    // mask 一半：前 4 + 8 颗 dot + 后 4
+    function maskSecret(secret) {
+      if (!secret) return '••••••••';
+      if (secret.length <= 8) return '••••••••';
+      return secret.slice(0, 4) + '••••••••' + secret.slice(-4);
+    }
+
+    function formatTs(ts) {
+      if (!ts) return '-';
+      try {
+        var d = new Date(ts);
+        if (isNaN(d.getTime())) return ts;
+        var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+          + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      } catch (e) { return ts; }
+    }
+
+    function renderReaderShareCard() {
+      var isPlatformAdminReadonly = !!(state.me && state.me.is_platform_admin && state.currentRole && state.currentRole !== 'owner');
+      var me = state.me;
+      var slug = me ? me.slug : '';
+
+      // === case 1: 非 owner 一律显示「权限不足」（不暴露 secret 是否存在）===
+      if (state.readerSecretNoAccess || (me && state.currentRole && state.currentRole !== 'owner')) {
+        return ''
+          + '<div class="branding-card reader-share-card" id="readerShareCard">'
+          +   '<div class="branding-card-title">🔗 阅读端分享链接</div>'
+          +   '<div class="branding-card-hint">当前账号角色是 <code>' + escapeHtml(state.currentRole || '?') + '</code>，无访问权限。</div>'
+          +   '<div class="reader-share-noaccess" id="rsNoAccess">'
+          +     '🔒 权限不足：仅 <strong>租户 owner</strong> 可查看和管理阅读端分享链接。'
+          +   '</div>'
+          + '</div>';
+      }
+
+      // === case 2: 加载中 ===
+      if (state.readerSecretLoading && !state.readerSecret) {
+        return ''
+          + '<div class="branding-card reader-share-card" id="readerShareCard">'
+          +   '<div class="branding-card-title">🔗 阅读端分享链接</div>'
+          +   '<div class="reader-share-loading" id="rsLoading"><div class="spin"></div><div>正在加载分享链接...</div></div>'
+          + '</div>';
+      }
+
+      // === case 3: 加载失败（403/ROLE_REQUIRED 也走这里）===
+      if (state.readerSecretError === 'forbidden') {
+        return ''
+          + '<div class="branding-card reader-share-card" id="readerShareCard">'
+          +   '<div class="branding-card-title">🔗 阅读端分享链接</div>'
+          +   '<div class="reader-share-noaccess" id="rsNoAccess">'
+          +     '🔒 无权访问：当前角色 <code>' + escapeHtml(state.currentRole || '?') + '</code> 无 owner 权限。'
+          +   '</div>'
+          + '</div>';
+      }
+      if (state.readerSecretError === 'load') {
+        return ''
+          + '<div class="branding-card reader-share-card" id="readerShareCard">'
+          +   '<div class="branding-card-title">🔗 阅读端分享链接</div>'
+          +   '<div class="reader-share-noaccess" id="rsNoAccess">'
+          +     '⚠ 加载失败，请刷新页面重试。'
+          +   '</div>'
+          +   '<div class="reader-share-actions" style="margin-top:12px">'
+          +     '<button class="btn btn-secondary btn-sm" id="rsRetryBtn" type="button">🔄 重试</button>'
+          +   '</div>'
+          + '</div>';
+      }
+
+      // === case 4: 正常展示（owner 或平台管理员的 owner 视角）===
+      var secret = state.readerSecret || '';
+      var displaySecret = state.readerSecretShown ? secret : maskSecret(secret);
+      var showBtnText = state.readerSecretShown ? '🙈 隐藏' : '👁 显示';
+      var link = buildReaderShareLink(secret);
+      var created = formatTs(state.readerSecretCreatedAt);
+      var updated = formatTs(state.readerSecretUpdatedAt);
+
+      // 平台管理员 readonly 标识（同时也是 owner）：仍可看，但不显示「重新生成」按钮
+      var showRegen = !(state.me && state.me.is_platform_admin);
+      var readonlyBadge = (state.me && state.me.is_platform_admin) ? '<span class="readonly-badge" id="rsReadonlyBadge">只读</span>' : '';
+
+      return ''
+        + '<div class="branding-card reader-share-card" id="readerShareCard">'
+        +   '<div class="branding-card-title">🔗 阅读端分享链接 ' + readonlyBadge + '</div>'
+        +   '<div class="branding-card-hint">把下面的链接发给读者；读者打开后会自动从 URL 取 secret，后续请求都带 <code>X-Reader-Secret</code> header。<strong>重新生成后旧链接立即失效</strong>。</div>'
+
+        // Secret 行
+        +   '<div class="reader-share-row">'
+        +     '<div class="reader-share-label">Secret</div>'
+        +     '<div class="reader-share-value">'
+        +       '<code class="reader-share-code" id="rsSecretDisplay">' + escapeHtml(displaySecret) + '</code>'
+        +       '<button class="btn btn-secondary btn-sm" id="rsToggleSecretBtn" type="button">' + showBtnText + '</button>'
+        +     '</div>'
+        +   '</div>'
+
+        // 完整链接行
+        +   '<div class="reader-share-row">'
+        +     '<div class="reader-share-label">完整链接</div>'
+        +     '<div class="reader-share-value">'
+        +       '<input class="reader-share-link-input" id="rsLinkInput" type="text" readonly value="' + escapeAttr(link) + '" onfocus="this.select()">'
+        +       '<button class="btn btn-primary btn-sm" id="rsCopyBtn" type="button">📋 复制链接</button>'
+        +     '</div>'
+        +   '</div>'
+
+        // 元信息
+        +   '<div class="reader-share-meta" id="rsMeta">'
+        +     'slug: <code>' + escapeHtml(slug) + '</code>　·　'
+        +     'host: <code>' + escapeHtml(window.location.hostname) + '</code>　·　'
+        +     'port: <code>' + escapeHtml(String((window.MAG_PUBLIC_PORT != null) ? window.MAG_PUBLIC_PORT : 50100)) + '</code>'
+        +     (created !== '-' ? '　·　创建：' + escapeHtml(created) : '')
+        +     (updated !== '-' && updated !== created ? '　·　更新：' + escapeHtml(updated) : '')
+        +   '</div>'
+
+        // 重新生成
+        +   (showRegen
+            ? '<div class="reader-share-warning"><span>⚠</span><span>重新生成会让所有正在使用旧链接的读者立即看到 <code>invalid_secret</code> 错误，请提前通知读者。</span></div>'
+              + '<div class="reader-share-regen-row">'
+              +   '<button class="btn btn-secondary btn-sm" id="rsRegenBtn" type="button">🔄 重新生成</button>'
+              + '</div>'
+            : '')
+
+        + '</div>';
+    }
+
     // ===== 应用主色到样例预览 =====
     function applySampleColor(color) {
       var btn = document.getElementById('sampleBtn');
@@ -646,6 +911,7 @@
           +   renderUploadCard()
           +   renderColorCard()
           + '</div>'
+          + renderReaderShareCard()
           + renderActions()
           + '<div class="info-strip">'
           +   '<div class="info-strip-icon">💡</div>'
@@ -654,6 +920,7 @@
 
         // 绑定事件
         bindEvents();
+        bindReaderShareEvents();
         applySampleColor(state.pendingColor);
         refreshDirtyMark();
       } catch (e) {
@@ -774,6 +1041,76 @@
       if (saveBtn) saveBtn.addEventListener('click', onSave);
       var resetBtn = document.getElementById('resetBtn');
       if (resetBtn) resetBtn.addEventListener('click', onReset);
+    }
+
+    // ===== 阅读端分享链接：事件绑定 =====
+    function bindReaderShareEvents() {
+      // 显示/隐藏 secret
+      var toggleBtn = document.getElementById('rsToggleSecretBtn');
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', function() {
+          state.readerSecretShown = !state.readerSecretShown;
+          // 不全量 render，只更新 secret 显示 + 按钮文案（避免 input 失焦）
+          var display = document.getElementById('rsSecretDisplay');
+          if (display) display.textContent = state.readerSecretShown
+            ? state.readerSecret
+            : maskSecret(state.readerSecret);
+          toggleBtn.textContent = state.readerSecretShown ? '🙈 隐藏' : '👁 显示';
+        });
+      }
+
+      // 复制链接
+      var copyBtn = document.getElementById('rsCopyBtn');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', function() {
+          var linkInput = document.getElementById('rsLinkInput');
+          if (!linkInput) return;
+          var link = linkInput.value;
+          if (!link) { toast('链接为空', 'error'); return; }
+          copyToClipboard(link)
+            .then(function() { toast('✅ 链接已复制到剪贴板', 'success'); })
+            .catch(function() { toast('复制失败，请手动选中复制', 'error'); });
+        });
+      }
+
+      // 重新生成
+      var regenBtn = document.getElementById('rsRegenBtn');
+      if (regenBtn) {
+        regenBtn.addEventListener('click', onRegenerateSecret);
+      }
+
+      // 重试（加载失败时）
+      var retryBtn = document.getElementById('rsRetryBtn');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', function() {
+          state.readerSecretError = null;
+          state.readerSecretLoading = true;
+          render();
+          loadReaderSecret();
+        });
+      }
+    }
+
+    // 复制到剪贴板（兼容旧浏览器 / 非 https）
+    function copyToClipboard(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+      }
+      // 兜底：textarea + execCommand
+      return new Promise(function(resolve, reject) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'absolute';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          ok ? resolve() : reject(new Error('execCommand failed'));
+        } catch (e) { reject(e); }
+      });
     }
 
     // ===== 上传缩略图 =====
@@ -898,6 +1235,68 @@
         + '</div>';
     }
 
+    // ===== 阅读端分享链接：拉数据 =====
+    async function loadReaderSecret() {
+      // 非 owner 直接走「权限不足」分支，不发请求
+      if (!state.currentRole || state.currentRole !== 'owner') {
+        state.readerSecretNoAccess = true;
+        render();
+        return;
+      }
+      state.readerSecretLoading = true;
+      state.readerSecretError = null;
+      state.readerSecretNoAccess = false;
+      try {
+        var data = await api.get('/admin/tenant/reader-secret');
+        state.readerSecret = (data && data.secret) || '';
+        state.readerSecretCreatedAt = (data && data.created_at) || '';
+        state.readerSecretUpdatedAt = (data && data.updated_at) || '';
+        state.readerSecretShown = false;
+        state.readerSecretLoading = false;
+        render();
+      } catch (e) {
+        var msg = (e && e.message) || '加载失败';
+        var is403 = /403|ROLE_REQUIRED|owner|无权|forbidden/i.test(msg);
+        state.readerSecretLoading = false;
+        state.readerSecretError = is403 ? 'forbidden' : 'load';
+        state.readerSecretNoAccess = is403;
+        render();
+      }
+    }
+
+    // ===== 阅读端分享链接：重新生成 =====
+    async function onRegenerateSecret() {
+      var ok = window.confirm('重新生成后旧链接将立即失效，确认？');
+      if (!ok) return;
+      var regenBtn = document.getElementById('rsRegenBtn');
+      if (regenBtn) {
+        regenBtn.disabled = true;
+        regenBtn.textContent = '生成中...';
+      }
+      try {
+        var data = await api.post('/admin/tenant/reader-secret/regenerate', {});
+        state.readerSecret = (data && data.secret) || '';
+        state.readerSecretCreatedAt = (data && data.created_at) || '';
+        state.readerSecretUpdatedAt = (data && data.updated_at) || '';
+        state.readerSecretShown = false;
+        state.readerSecretError = null;
+        render();
+        toast('✅ 已重新生成。旧链接立即失效。', 'success');
+      } catch (e) {
+        var msg = (e && e.message) || '重新生成失败';
+        if (/403|ROLE_REQUIRED|owner|无权/.test(msg)) {
+          toast('权限不足：仅 owner 可重新生成 secret', 'error');
+        } else {
+          toast(msg, 'error');
+        }
+        var btn2 = document.getElementById('rsRegenBtn');
+        if (btn2) {
+          btn2.disabled = false;
+          btn2.textContent = '🔄 重新生成';
+        }
+      }
+    }
+
     // ===== 加载 + 角色校验 =====
     async function load() {
       var me;
@@ -912,8 +1311,24 @@
 
       // 角色校验：必须是 owner。后端会再校验一次（requireRole('owner')），这里做前端预检
       var user = await MAG_AUTH.getUser();
+      state.currentRole = user ? user.role : null;
       if (!user || user.role !== 'owner') {
-        document.getElementById('contentArea').innerHTML = renderNoAccess('您的当前账号角色是 <code>' + escapeHtml(user ? user.role : '?') + '</code>，无修改权限。');
+        // 非 owner：只渲染 hero + 「无权访问」卡 + 阅读端分享链接的「权限不足」卡
+        //   （任务要求 editor / viewer 看到「权限不足」——分享链接是 owner 专属）
+        //   其它品牌操作（logo / 主色）后端 requireRole('owner') 会挡住，UI 不再开放
+        try {
+          var ca = document.getElementById('contentArea');
+          ca.innerHTML = ''
+            + renderHero()
+            + renderReaderShareCard()  // 卡内部会自己显示「权限不足」
+            + '<div style="margin-top:18px;padding:14px 18px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font-size:13px;color:#991b1b;line-height:1.6">'
+            +   '🔒 品牌定制（logo / 主色）仅 <strong>租户 owner</strong> 可见。'
+            +   '您的当前账号角色是 <code>' + escapeHtml(user ? user.role : '?') + '</code>，无修改权限。'
+            + '</div>';
+          bindReaderShareEvents();
+        } catch (e2) {
+          console.error('[branding] non-owner render failed:', e2);
+        }
         return;
       }
 
@@ -937,6 +1352,8 @@
         state.originalColor = state.current.primary_color.toLowerCase();
         state.pendingColor = state.originalColor;
         render();
+        // 并行拉阅读端分享链接（owner only）
+        loadReaderSecret();
       } catch (e) {
         var msg = (e && e.message) || '加载失败';
         var is403 = /403|ROLE_REQUIRED|owner|无权/.test(msg);
