@@ -42,10 +42,6 @@
   function buildHtml(active, ctx) {
     var isPlatform = !!(ctx && ctx.tenant && ctx.tenant.is_platform_admin);
     var isOwner = !!(ctx && ctx.user && ctx.user.role === 'owner');
-    var tenant = (ctx && ctx.tenant) || {};
-    // 当前激活的菜单项：用品牌 logo 替换原 emoji，让「你在哪个租户」一眼可见
-    var activeLogoUrl = tenant.logo_url || '';
-    var activeLogoAlt = tenant.name || 'logo';
 
     return ITEMS.map(function (it) {
       // 角色过滤
@@ -53,16 +49,10 @@
       if (it.role === 'owner' && !isOwner) return '';
 
       var cls = 'nav-item';
-      var isActive = (it.key === active);
-      if (isActive) cls += ' active';
-      // 激活项：如果租户有上传 logo，替换 nav-icon 为品牌 logo img
-      // 否则用 Lucide 图标（data-lucide，nav.js 加载完后会替换为 <svg>）
-      var iconHtml;
-      if (isActive && activeLogoUrl) {
-        iconHtml = '<img class="sidebar-logo-img nav-active-logo" src="' + escapeHtml(activeLogoUrl) + '" alt="' + escapeHtml(activeLogoAlt) + '">';
-      } else {
-        iconHtml = '<i class="nav-icon" data-lucide="' + escapeHtml(it.icon) + '"></i>';
-      }
+      if (it.key === active) cls += ' active';
+      // 统一用 Lucide 图标（data-lucide 由 lucide.createIcons() 渲染成 <svg>）
+      // 激活态只通过背景色区分，图标不变（避免点击时图标跳变）
+      var iconHtml = '<i class="nav-icon" data-lucide="' + escapeHtml(it.icon) + '"></i>';
       return '<a href="' + escapeHtml(it.href) + '" class="' + cls + '" data-page="' + escapeHtml(it.key) + '">' +
              iconHtml + ' ' +
              escapeHtml(it.label) +
@@ -88,6 +78,10 @@
           return ctx;
         }
         el.innerHTML = buildHtml(active, ctx);
+        // Lucide 图标：把 <i data-lucide="x"> 替换成 <svg>（如果 lucide 已加载）
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          try { window.lucide.createIcons({ nameAttr: 'data-lucide' }); } catch (e) { /* 容错 */ }
+        }
         // 顶栏 + 侧边栏 logo 由 topbar.js 提供；若已加载则一并渲染
         if (window.MAG_TOPBAR) {
           try { MAG_TOPBAR.render(ctx); } catch (e) { /* 容错 */ }
