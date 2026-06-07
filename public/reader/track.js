@@ -51,7 +51,11 @@
       if (navigator.sendBeacon && navigator.sendBeacon('/api/public/analytics/track', blob)) return;
     } catch (e) { /* fallthrough */ }
     try {
-      fetch('/api/public/analytics/track', {
+      // keepalive fetch 兜底：通过 MAG_READER_AUTH.fetch 包装，
+      // 自动注入 X-Reader-Secret header（如果当前已存到 localStorage），
+      // 401 时清掉 secret + 派发 'reader:auth_failed' 事件
+      var doFetch = (window.MAG_READER_AUTH && window.MAG_READER_AUTH.fetch) || fetch;
+      doFetch('/api/public/analytics/track', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: body,

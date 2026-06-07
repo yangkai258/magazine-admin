@@ -139,6 +139,40 @@
       .book-name { font-size: 14px; }
       .book-arrow { width: 16px; height: 16px; }
     }
+
+    /* ====== 鉴权提示页（覆盖整个目录）====== */
+    .auth-page {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: #f7f7f9;
+      z-index: 999;
+      padding: 24px;
+    }
+    .auth-card {
+      max-width: 380px; width: 100%;
+      background: #fff;
+      border: 1px solid #ececec;
+      border-radius: 16px;
+      padding: 40px 28px;
+      text-align: center;
+      color: #333;
+      font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.06);
+    }
+    .auth-icon { font-size: 48px; margin-bottom: 18px; }
+    .auth-title {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+      color: var(--primary);
+    }
+    .auth-hint {
+      font-size: 14px;
+      line-height: 1.7;
+      color: #888;
+      letter-spacing: 0.5px;
+    }
   </style>
 </head>
 <body>
@@ -155,7 +189,10 @@
 
 <div class="footer-note"><span class="footer-dot"></span>支持手机 / 平板 / 电脑阅读</div>
 
+<div class="auth-page" id="authPage" style="display:none"></div>
+
 <script src="config.js"></script>
+<script src="reader/secret.js?v=1"></script>
 <script src="reader/track.js"></script>
 <script>
 (function() {
@@ -165,6 +202,69 @@
     return (q && q.trim()) || (window.MAG_CONFIG && window.MAG_CONFIG.DEFAULT_TENANT) || 'zhuobao';
   }
   var tenantSlug = resolveTenant();
+
+  // ====== Secret 鉴权：URL ?s=xxx 优先 → localStorage 兜底 ======
+  var initSecret = window.MAG_READER_AUTH.init();
+  var hasSecret = !!initSecret;
+
+  // HTML 转义（防御 XSS：用于错误页 URL 参数回显）
+  function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // ====== 鉴权失败 / 缺 secret：展示提示页（覆盖整个目录）======
+  function showAuthPage(kind) {
+    // kind: 'missing' | 'invalid'
+    var $header = document.querySelector('.header');
+    var $bookList = document.getElementById('bookList');
+    var $footer = document.querySelector('.footer-note');
+    if ($header) $header.style.display = 'none';
+    if ($bookList) $bookList.style.display = 'none';
+    if ($footer) $footer.style.display = 'none';
+    var $page = document.getElementById('authPage');
+    if (!$page) return;
+    var title, hint, icon;
+    if (kind === 'invalid') {
+      icon = '🔒';
+      title = '链接无效';
+      hint = '该阅读链接已失效或被撤销，请联系客户获取新的链接。';
+    } else {
+      icon = '🔑';
+      title = '请通过客户提供的链接访问';
+      hint = '本页面需要有效的阅读链接才能打开。请使用客户分享给你的完整链接。';
+    }
+    $page.innerHTML =
+      '<div class="auth-card">' +
+        '<div class="auth-icon">' + icon + '</div>' +
+        '<div class="auth-title">' + escapeHtml(title) + '</div>' +
+        '<div class="auth-hint">' + escapeHtml(hint) + '</div>' +
+      '</div>';
+    $page.style.display = 'flex';
+  }
+
+  // 没 secret → 立即展示「请通过链接访问」页
+  if (!hasSecret) {
+    showAuthPage('missing');
+    return;
+  }
+
+  // 401 监听：后端拒绝 → 展示「链接无效」页
+  window.addEventListener('reader:auth_failed', function() {
+    showAuthPage('invalid');
+  });
+
+  // 辅助：跳到 viewer 时拼上 secret
+  function buildViewerHref(magazineId) {
+    var sec = window.MAG_READER_AUTH.getSecret() || '';
+    var sep = sec ? '&s=' + encodeURIComponent(sec) : '';
+    return 'reader/viewer.html?id=' + encodeURIComponent(magazineId) + '&t=' + encodeURIComponent(tenantSlug) + sep;
+  }
 
   function findTenant(data, slug) {
     var list = (data.tenants || []);
@@ -201,7 +301,7 @@
     var dataUrl = (window.MAG_CONFIG && window.MAG_CONFIG.DATA_URL) || (location.origin + '/api/public/data');
     try {
       // 拉全集 data（live 后端），本地按 tenant 过滤
-      var data = await fetch(dataUrl, { cache: 'no-cache' }).then(function(r) {
+      var data = await window.MAG_READER_AUTH.fetch(dataUrl, { cache: 'no-cache' }).then(function(r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
       });
@@ -228,8 +328,8 @@
         var cover = m.cover_pc || m.cover_mobile || '';
         var item = document.createElement('a');
         item.className = 'book-item';
-        // 把 tenant slug 传下去
-        item.href = 'reader/viewer.html?id=' + m.id + '&t=' + encodeURIComponent(tenantSlug);
+        // 把 tenant + secret 传下去（secret 跨页传播：URL ?s= 兜底）
+        item.href = buildViewerHref(m.id);
         // 埋点：点击杂志卡 → view（用 sendBeacon，导航期间也能发）
         item.addEventListener('click', function() {
           try {
@@ -251,20 +351,14 @@
       });
     } catch (e) {
       console.error('[directory] load failed:', e);
-      list.innerHTML = '<div style="text-align:center;padding:40px;color:#e53935">加载失败，请检查网络或数据源</div>';
+      // 注意：401 已经被 auth_failed 事件处理掉了，这里只处理非 401 的失败
+      if (!document.getElementById('authPage') || document.getElementById('authPage').style.display === 'none') {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:#e53935">加载失败，请检查网络或数据源</div>';
+      }
     }
   }
 
-  // HTML 转义（防御 m.name 注入）
-  function escapeHtml(s) {
-    if (s === null || s === undefined) return '';
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
+  // HTML 转义（防御 m.name 注入）—— 使用 IIFE 顶部定义的 escapeHtml
 
   load();
 })();

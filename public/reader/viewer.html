@@ -104,6 +104,40 @@
     .page-missing-url { font-size: 11px; color: #999; max-width: 80%; text-align: center; word-break: break-all; font-family: monospace; }
 
     @media (max-width: 768px) { .nav-btn { width: 36px; height: 60px; } }
+
+    /* ====== 鉴权提示页（覆盖整个 viewer）====== */
+    .auth-page {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: #fff;
+      z-index: 9999;
+      padding: 24px;
+    }
+    .auth-card {
+      max-width: 380px; width: 100%;
+      background: #fafafa;
+      border: 1px solid #ececec;
+      border-radius: 16px;
+      padding: 40px 28px;
+      text-align: center;
+      color: #333;
+      font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.06);
+    }
+    .auth-icon { font-size: 48px; margin-bottom: 18px; }
+    .auth-title {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+      color: var(--primary);
+    }
+    .auth-hint {
+      font-size: 14px;
+      line-height: 1.7;
+      color: #888;
+      letter-spacing: 0.5px;
+    }
   </style>
 </head>
 <body>
@@ -111,6 +145,8 @@
   页面加载中...
   <div class="loading-bar"></div>
 </div>
+
+<div class="auth-page" id="authPage" style="display:none"></div>
 
 <a class="back-btn" id="backBtn" href="#">
   <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
@@ -160,6 +196,7 @@
 <script src="lib/jquery.min.js"></script>
 <script src="lib/turn.min.js"></script>
 <script src="../config.js"></script>
+<script src="secret.js?v=1"></script>
 <script src="track.js"></script>
 <script>
 (function() {
@@ -170,6 +207,74 @@
   }
   var tenantSlug = resolveTenant();
   var magazineId = new URLSearchParams(location.search).get('id') || 1;
+
+  // ====== Secret 鉴权：URL ?s=xxx 优先 → localStorage 兜底 ======
+  var initSecret = window.MAG_READER_AUTH.init();
+  var hasSecret = !!initSecret;
+
+  // HTML 转义（防御 XSS：用于错误页 URL 参数回显）
+  function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // ====== 鉴权失败 / 缺 secret：展示提示页（覆盖整个 viewer）======
+  function showAuthPage(kind) {
+    // kind: 'missing' | 'invalid'
+    var $loading = document.getElementById('loading');
+    var $viewport = document.getElementById('viewport');
+    var $mobileViewport = document.getElementById('mobileViewport');
+    var $mobileDotsBar = document.getElementById('mobileDotsBar');
+    var $mobileBottomNav = document.getElementById('mobileBottomNav');
+    var $zoomCtl = document.getElementById('zoomCtl');
+    var $zoomLabel = document.getElementById('zoomLabel');
+    var $pageIndicator = document.getElementById('pageIndicator');
+    var $backBtn = document.getElementById('backBtn');
+    if ($loading) $loading.style.display = 'none';
+    if ($viewport) $viewport.style.display = 'none';
+    if ($mobileViewport) $mobileViewport.style.display = 'none';
+    if ($mobileDotsBar) $mobileDotsBar.style.display = 'none';
+    if ($mobileBottomNav) $mobileBottomNav.style.display = 'none';
+    if ($zoomCtl) $zoomCtl.style.display = 'none';
+    if ($zoomLabel) $zoomLabel.style.display = 'none';
+    if ($pageIndicator) $pageIndicator.style.display = 'none';
+    if ($backBtn) $backBtn.style.display = 'none';
+    var $page = document.getElementById('authPage');
+    if (!$page) return;
+    var title, hint, icon;
+    if (kind === 'invalid') {
+      icon = '🔒';
+      title = '链接无效';
+      hint = '该阅读链接已失效或被撤销，请联系客户获取新的链接。';
+    } else {
+      icon = '🔑';
+      title = '请通过客户提供的链接访问';
+      hint = '本页面需要有效的阅读链接才能打开。请使用客户分享给你的完整链接。';
+    }
+    $page.innerHTML =
+      '<div class="auth-card">' +
+        '<div class="auth-icon">' + icon + '</div>' +
+        '<div class="auth-title">' + escapeHtml(title) + '</div>' +
+        '<div class="auth-hint">' + escapeHtml(hint) + '</div>' +
+      '</div>';
+    $page.style.display = 'flex';
+  }
+
+  // 没 secret → 立即展示「请通过链接访问」页
+  if (!hasSecret) {
+    showAuthPage('missing');
+    return;
+  }
+
+  // 401 监听：后端拒绝 → 展示「链接无效」页
+  window.addEventListener('reader:auth_failed', function() {
+    showAuthPage('invalid');
+  });
 
   // ====== Reader 埋点：状态（埋点上报由 track.js 提供 window.MAG_TRACK）======
   var READ_START_TS = Date.now();        // 页面进入时间
@@ -217,8 +322,12 @@
     fireDwell(Date.now() - READ_START_TS);
   });
 
-  // 返回目录时把 tenant 带上
-  document.getElementById('backBtn').setAttribute('href', '../directory.html?t=' + encodeURIComponent(tenantSlug));
+  // 返回目录时把 tenant + secret 带上（secret 跨页传播：URL ?s= 兜底）
+  (function() {
+    var sec = window.MAG_READER_AUTH.getSecret() || '';
+    var sep = sec ? '&s=' + encodeURIComponent(sec) : '';
+    document.getElementById('backBtn').setAttribute('href', '../directory.html?t=' + encodeURIComponent(tenantSlug) + sep);
+  })();
 
   var pages = [];           // 从 OSS data.json 拉
   var TOTAL_IMGS = 0;       // 总图片数 = pages.length
@@ -681,7 +790,7 @@
   function loadMagazine() {
     // SaaS 默认：同源 /api/public/data；可由 MAG_CONFIG.DATA_URL 覆盖
     var dataUrl = (window.MAG_CONFIG && window.MAG_CONFIG.DATA_URL) || (location.origin + '/api/public/data');
-    return fetch(dataUrl, { cache: 'no-cache' }).then(function(r) {
+    return window.MAG_READER_AUTH.fetch(dataUrl, { cache: 'no-cache' }).then(function(r) {
       if (!r.ok) throw new Error('HTTP ' + r.status + ' 拉 data 失败');
       return r.json();
     }).then(function(data) {
