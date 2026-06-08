@@ -693,21 +693,23 @@ function getTenantUsage(tenantId) {
 
 function snapshotForPublish({ tenantId } = {}) {
   // 公共发布快照：tenant 字段**绝不**包含 reader_secret（防泄漏）
+  // helper：过滤掉 suspended 租户 + 按 tenantId 收敛（防单租户外泄）
+  const matchesTenant = (id) => tenantId === undefined || tenantId === null || Number(id) === Number(tenantId);
   const stripTenant = (t) => ({
     id: t.id, slug: t.slug, name: t.name,
     logo_url: t.logo_url || '',
     primary_color: t.primary_color || '#4f46e5'
   });
-  const matchesTenant = (id) => tenantId === undefined || tenantId === null || Number(id) === Number(tenantId);
+  const isLiveTenant = (id) => {
+    const t = (data.tenants || []).find(x => x.id === id);
+    return t && !t.suspended && matchesTenant(id);
+  };
   return {
     tenants: (data.tenants || [])
       .filter(t => !t.suspended && matchesTenant(t.id))
       .map(stripTenant),
     magazines: data.magazines
-      .filter(m => {
-        const t = (data.tenants || []).find(x => x.id === m.tenant_id);
-        return t && !t.suspended && matchesTenant(m.tenant_id);
-      })
+      .filter(m => isLiveTenant(m.tenant_id))
       .map(m => ({
         id: m.id, tenant_id: m.tenant_id, name: m.name,
         upload_date: m.upload_date, description: m.description,
@@ -715,16 +717,10 @@ function snapshotForPublish({ tenantId } = {}) {
         enabled: m.enabled, created_at: m.created_at
       })),
     pages: data.pages
-      .filter(p => {
-        const t = (data.tenants || []).find(x => x.id === p.tenant_id);
-        return t && !t.suspended && matchesTenant(p.tenant_id);
-      })
+      .filter(p => isLiveTenant(p.tenant_id))
       .map(p => ({ id: p.id, tenant_id: p.tenant_id, magazine_id: p.magazine_id, page_order: p.page_order, image_path: p.image_path, created_at: p.created_at })),
     covers: data.covers
-      .filter(c => {
-        const t = (data.tenants || []).find(x => x.id === c.tenant_id);
-        return t && !t.suspended && matchesTenant(c.tenant_id);
-      })
+      .filter(c => isLiveTenant(c.tenant_id))
       .map(c => ({ id: c.id, tenant_id: c.tenant_id, magazine_id: c.magazine_id, type: c.type, image_path: c.image_path, created_at: c.created_at }))
   };
 }

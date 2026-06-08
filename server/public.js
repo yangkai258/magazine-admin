@@ -98,19 +98,24 @@ app.get('/api/public/tenants', (req, res) => {
   }]);
 });
 
+// slug 路由：requireReaderAuth 已经确认 secret 匹配了某个 tenant，且该 tenant.slug === req.params.slug
+// （不匹配会返 401，不会走到这里）。所以不再二次查 tenant，直接信任 slug 取数据。
+function publicTenantBySlug(req, res) {
+  if (requireReaderAuth(req, res, req.params.slug)) return null;
+  return db.getTenantBySlug(req.params.slug);
+}
+
 app.get('/api/public/tenants/:slug/magazines', (req, res) => {
-  if (requireReaderAuth(req, res, req.params.slug)) return;
-  const tenant = db.getTenantBySlug(req.params.slug);
-  if (!tenant) return res.status(404).json({ error: 'tenant not found' });
+  const tenant = publicTenantBySlug(req, res);
+  if (!tenant) return;  // 401 或 404 已写
   const { enabled } = req.query;
   const filter = enabled !== undefined ? { enabled } : { enabled: 1 };
   res.json(db.getAllMagazines({ tenantId: tenant.id, ...filter }));
 });
 
 app.get('/api/public/tenants/:slug/magazines/:id', (req, res) => {
-  if (requireReaderAuth(req, res, req.params.slug)) return;
-  const tenant = db.getTenantBySlug(req.params.slug);
-  if (!tenant) return res.status(404).json({ error: 'tenant not found' });
+  const tenant = publicTenantBySlug(req, res);
+  if (!tenant) return;
   const magazine = db.getMagazine(req.params.id, { tenantId: tenant.id });
   if (!magazine || magazine.enabled !== 1) return res.status(404).json({ error: 'magazine not found' });
   const pages = db.getPages(req.params.id, { tenantId: tenant.id });
@@ -118,9 +123,8 @@ app.get('/api/public/tenants/:slug/magazines/:id', (req, res) => {
 });
 
 app.get('/api/public/tenants/:slug/cover', (req, res) => {
-  if (requireReaderAuth(req, res, req.params.slug)) return;
-  const tenant = db.getTenantBySlug(req.params.slug);
-  if (!tenant) return res.status(404).json({ error: 'tenant not found' });
+  const tenant = publicTenantBySlug(req, res);
+  if (!tenant) return;
   const { type } = req.query;
   if (!type || !['pc', 'mobile'].includes(type)) return res.status(400).json({ error: 'type 必须是 pc 或 mobile' });
   const candidates = db.getAllCovers({ tenantId: tenant.id }).filter(c => c.type === type && c.magazine_id == null);

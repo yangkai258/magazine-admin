@@ -19,12 +19,12 @@
 (function () {
   'use strict';
 
-  var STORAGE_KEY = 'mag_reader_secret';
+  const STORAGE_KEY = 'mag_reader_secret';
 
   // 读 ?s= 参数；优先 trim 过滤空值
   function readSecretFromUrl() {
     try {
-      var s = new URLSearchParams(location.search).get('s');
+      const s = new URLSearchParams(location.search).get('s');
       if (s && String(s).trim()) return String(s).trim();
     } catch (e) { /* ignore */ }
     return null;
@@ -48,7 +48,7 @@
     } catch (e) {
       // 老浏览器兜底
       try {
-        var evt = document.createEvent('CustomEvent');
+        const evt = document.createEvent('CustomEvent');
         evt.initCustomEvent('reader:auth_failed', false, false, null);
         window.dispatchEvent(evt);
       } catch (_) { /* ignore */ }
@@ -62,8 +62,8 @@
      *   2) 否则从 localStorage 读（用户刷新页面的场景）
      * 返回当前有效的 secret（string | null）
      */
-    init: function () {
-      var fromUrl = readSecretFromUrl();
+    init() {
+      const fromUrl = readSecretFromUrl();
       if (fromUrl) {
         writeSecretToStorage(fromUrl);
         return fromUrl;
@@ -72,12 +72,12 @@
     },
 
     /** 返当前 secret（可能为 null） */
-    getSecret: function () {
+    getSecret() {
       return readSecretFromStorage();
     },
 
     /** 清掉 localStorage（401 时内部自动调；外部一般不需要） */
-    clear: function () {
+    clear() {
       removeSecretFromStorage();
     },
 
@@ -85,26 +85,25 @@
      * 包装 fetch：自动注入 X-Reader-Secret header；401 拦截 + 派发事件
      * 用法同原生 fetch(url, options)，返 Promise<Response>
      */
-    fetch: function (url, options) {
-      options = options || {};
+    fetch(url, options = {}) {
       // 浅克隆 headers 避免污染调用方的对象
-      var headers = {};
+      const headers = {};
       if (options.headers) {
         if (options.headers instanceof Headers) {
-          options.headers.forEach(function (v, k) { headers[k] = v; });
+          options.headers.forEach((v, k) => { headers[k] = v; });
         } else {
-          for (var k in options.headers) {
+          for (const k in options.headers) {
             if (Object.prototype.hasOwnProperty.call(options.headers, k)) headers[k] = options.headers[k];
           }
         }
       }
-      var secret = readSecretFromStorage();
+      const secret = readSecretFromStorage();
       if (secret) headers['X-Reader-Secret'] = secret;
       // credentials 允许 same-origin 携带 cookie（虽然现在没用到，但保留扩展性）
       options.headers = headers;
       if (options.credentials == null) options.credentials = 'same-origin';
 
-      return fetch(url, options).then(function (r) {
+      return fetch(url, options).then((r) => {
         if (r && r.status === 401) {
           // secret 失效：清掉 + 通知页面
           removeSecretFromStorage();

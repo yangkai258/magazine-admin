@@ -394,8 +394,9 @@ app.put('/api/admin/branding', auth.requireRole('owner'), upload.single('logo'),
 });
 
 // ========== Reader 端共享链接（v5：reader 端 URL 鉴权 secret） ==========
-// Public 端 reader 端实际监听端口（供 link 生成用；硬编码为规格约定的 50100）
-const READER_PUBLIC_PORT = 50100;
+// Public 端 reader 端实际监听端口（供 link 生成用）
+// 优先级：env MAG_PUBLIC_PORT > env PUBLIC_PORT > 默认 50100
+const READER_PUBLIC_PORT = Number(process.env.MAG_PUBLIC_PORT || process.env.PUBLIC_PORT || 50100);
 
 function buildReaderLink(req, tenant) {
   const hostname = (req.get('host') || '').split(':')[0] || 'localhost';
