@@ -13,7 +13,11 @@ app.use(express.json());
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
-app.get('/', (req, res) => res.redirect('/splash.html'));
+app.get('/', (req, res) => {
+  // 保留原 query string（?t=<slug>&s=<secret> 链接进阅读端的关键）
+  const qs = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+  res.redirect('/splash.html' + qs);
+});
 
 // ========== Reader Secret 鉴权 (v5) ==========
 // 从 header / query 拿 secret；header 优先
