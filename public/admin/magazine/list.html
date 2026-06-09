@@ -20,6 +20,8 @@
     <main class="main-content">
       <header class="top-bar"><h1 class="page-title">杂志管理</h1><button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button></header>
       <div class="content-area">
+        <!-- 阅读端分享链接卡（owner 可看 / 平台 admin readonly / 其他角色显示无权限）-->
+        <div id="readerShareMount"></div>
         <div class="search-bar">
           <input type="text" id="searchInput" placeholder="搜索杂志名称...">
           <button class="btn btn-primary" id="addBtn" style="display:none">+ 新增杂志</button>
@@ -95,6 +97,7 @@
   </div>
 
   <script src="/admin/js/api.js"></script>
+  <script src="/admin/js/reader-share.js"></script>
   <script>
     // 渲染侧边栏 nav（统一从 nav.js 拿 10 项，按角色过滤）
     MAG_NAV.render('magazine').then(function (ctx) {
@@ -108,6 +111,8 @@
       } else {
         window.__isOwner = false;
       }
+      // 平台管理员标识（影响 reader-share 卡是否显示"重新生成"按钮）
+      window.__isPlatformAdmin = !!(u && u.is_platform_admin);
       // 把当前 tenant slug 同步给下面的渲染逻辑（预览链接用）
       window.__tenantSlug = (ctx && ctx.tenant && ctx.tenant.slug) || 'zhuobao';
     });
@@ -229,7 +234,28 @@
 
     document.getElementById('searchInput').addEventListener('input', loadMagazines);
     // 等待角色确定后 load（确保编辑/删除按钮状态正确）
-    MAG_AUTH.getUser().then(function() { loadMagazines(); });
+    MAG_AUTH.getUser().then(function() {
+      loadMagazines();
+      // 挂载「阅读端分享链接」卡（module: /admin/js/reader-share.js）
+      var me = (MAG_AUTH && MAG_AUTH.getUser) ? null : null;
+      try {
+        // api.js 在文件加载完成后会挂到 window.api
+        // MAG_AUTH.getUser() 同步返回缓存的 user 或重新拉一次
+        // 我们直接 mount：模块内部只依赖 ctx.api 和 ctx.toast
+        if (window.MAG_READER_SHARE && window.MAG_READER_SHARE.mount) {
+          window.__readerShareMount = window.MAG_READER_SHARE.mount(
+            document.getElementById('readerShareMount'),
+            {
+              api: window.api,
+              toast: (typeof toast === 'function') ? toast : function(m){ console.log('[toast]', m); },
+              getCurrentRole: function() { return (window.__isOwner ? 'owner' : 'editor'); },
+              getCurrentUser: function() { return { is_platform_admin: !!(window.__isPlatformAdmin) }; },
+              getCurrentSlug: function() { return window.__tenantSlug || 'zhuobao'; }
+            }
+          );
+        }
+      } catch (e) { console.error('[reader-share mount]', e); }
+    });
   </script>
 </body>
 </html>

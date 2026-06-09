@@ -9,4 +9,8 @@
 process.env.PUBLIC_PORT = '50100';
 process.env.ADMIN_PORT = '50120';
 process.env.ADMIN_PASSWORD = 'MagAdmin2026ChangeMe';
+// Public reader 端对外访问 base URL（cloudflared tunnel / 域名 / 反代场景）。
+// 留空时 admin.js 用 req.host + READER_PUBLIC_PORT 自动生成（适合本地 localhost）。
+// 部署到 https://reader.example.com/ 时设：process.env.MAG_PUBLIC_BASE_URL='https://reader.example.com'
+process.env.MAG_PUBLIC_BASE_URL = process.env.MAG_PUBLIC_BASE_URL || 'https://simpson-sussex-cheap-further.trycloudflare.com';
 require('../server/index.js');

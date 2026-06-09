@@ -394,13 +394,25 @@ app.put('/api/admin/branding', auth.requireRole('owner'), upload.single('logo'),
 });
 
 // ========== Reader 端共享链接（v5：reader 端 URL 鉴权 secret） ==========
-// Public 端 reader 端实际监听端口（供 link 生成用）
-// 优先级：env MAG_PUBLIC_PORT > env PUBLIC_PORT > 默认 50100
-const READER_PUBLIC_PORT = Number(process.env.MAG_PUBLIC_PORT || process.env.PUBLIC_PORT || 50100);
+// 优先级：
+//   1) env MAG_PUBLIC_BASE_URL 完整覆盖（推荐：tunnel / 反代 / 域名场景）
+//   2) env MAG_PUBLIC_PORT 端口（默认 80——"标准端口"不带端口号；非 80 才显示 :port）
+//   3) 兜底：用 req.host 推 proto+host，端口按 proto 80/443 判断
+const READER_PUBLIC_BASE_URL = (process.env.MAG_PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+const READER_PUBLIC_PORT = Number(process.env.MAG_PUBLIC_PORT || process.env.PUBLIC_PORT || 80);
 
 function buildReaderLink(req, tenant) {
-  const hostname = (req.get('host') || '').split(':')[0] || 'localhost';
-  return `http://${hostname}:${READER_PUBLIC_PORT}/?t=${tenant.slug}&s=${tenant.reader_secret}`;
+  // 1) 完整覆盖（tunnel / 反代 / 域名）
+  if (READER_PUBLIC_BASE_URL) {
+    return `${READER_PUBLIC_BASE_URL}/?t=${tenant.slug}&s=${tenant.reader_secret}`;
+  }
+  // 2) 兜底：用请求 host + 标准端口判断
+  const host = (req.get('host') || '').split(':')[0] || 'localhost';
+  const proto = (req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0];
+  const port = READER_PUBLIC_PORT;
+  const isStandardPort = (proto === 'https' && port === 443) || (proto === 'http' && port === 80);
+  const portPart = isStandardPort ? '' : `:${port}`;
+  return `${proto}://${host}${portPart}/?t=${tenant.slug}&s=${tenant.reader_secret}`;
 }
 
 app.get('/api/admin/tenant/reader-secret', auth.requireRole('owner'), (req, res) => {
