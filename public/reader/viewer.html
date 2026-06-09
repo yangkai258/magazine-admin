@@ -48,11 +48,32 @@
     .zoom-label.show { opacity: 1; }
 
     /* ===== 移动端 ===== */
-    .mobile-mode .flipbook-viewport, .mobile-mode .nav-btn, .mobile-mode .zoom-ctl, .mobile-mode .page-indicator { display: none !important; }
+    .mobile-mode .flipbook-viewport, .mobile-mode .nav-btn, .mobile-mode .page-indicator { display: none !important; }
+    /* 移动端：保留 .zoom-ctl 显示（去掉 !important 隐藏），让 +/- 按钮可见 */
+    .mobile-mode .zoom-ctl {
+      display: flex !important; position: fixed; right: 12px; top: 50%; transform: translateY(-50%);
+      flex-direction: column; gap: 10px; z-index: 150;
+    }
+    .mobile-mode .zoom-ctl button { width: 44px; height: 44px; box-shadow: 0 2px 10px rgba(0,0,0,0.25); }
+    .mobile-mode .zoom-ctl button svg { width: 20px; height: 20px; }
     .mobile-mode .mobile-viewport { display: block !important; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; overflow: hidden; }
+    /* zoom 时改成 visible，让放大后的 page 能溢出 viewport 显示 */
+    .mobile-mode .mobile-viewport.zooming { overflow: visible; }
     .mobile-mode .mobile-track { display: flex; width: 100%; height: 100%; transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
     .mobile-mode .mobile-track .mobile-page { flex: 0 0 100vw; width: 100vw; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden !important; }
     .mobile-mode .mobile-track .mobile-page img { width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; }
+
+    /* 移动端首次双指/双击提示 toast */
+    .zoom-hint {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.72); color: #fff; padding: 12px 22px; border-radius: 12px;
+      font-size: 14px; font-family: -apple-system, Arial, sans-serif;
+      z-index: 300; pointer-events: none; opacity: 0; transition: opacity 0.4s;
+      display: flex; align-items: center; gap: 8px; backdrop-filter: blur(8px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3); max-width: 80vw; text-align: center; line-height: 1.4;
+    }
+    .zoom-hint.show { opacity: 1; }
+    .zoom-hint svg { width: 18px; height: 18px; fill: #fff; flex-shrink: 0; }
 
     /* 移动端底部圆点（进度条）*/
     .mobile-dots-bar { position: fixed; bottom: 90px; left: 0; right: 0; display: flex; gap: 6px; justify-content: center; z-index: 100; padding: 0 8px; }
@@ -198,6 +219,27 @@
 <script src="../config.js"></script>
 <script src="secret.js?v=1"></script>
 <script src="track.js"></script>
+<script>
+  // ====== 抑制 jQuery 1.x + turn.js 1.x 的已知噪音 ======
+  // 错误：((ce.event.special[o.origType] || {}).handle || o.handler).apply is not a function
+  //       at HTMLDivElement.dispatch (jquery.min.js)
+  // 根因：turn.js 1.x 在翻页/缩放时动态移除/添加 <div> 上的 jQuery load 事件 handler，
+  //       load 事件冒泡时 jQuery 内部 handler 引用已为 undefined 抛错。
+  //       不影响图片渲染和翻页功能（图片是 <img> 直加载不走 jQuery load 链）。
+  //       真实修复需升级 jQuery → 3.x 或 turn.js → 4.x，工作量大；这里先 filter 噪音。
+  (function() {
+    var SEEN = 0;
+    window.addEventListener('error', function(e) {
+      var msg = (e && e.message) || '';
+      if (msg.indexOf('o.handler.apply is not a function') !== -1) {
+        e.preventDefault && e.preventDefault();
+        e.stopImmediatePropagation && e.stopImmediatePropagation();
+        if (++SEEN <= 3) console.info('[jQuery/turn.js known-issue] 已抑制 ' + SEEN + ' 次 o.handler.apply 噪音（图片仍可正常加载）');
+        return true;
+      }
+    }, true);
+  })();
+</script>
 <script>
 (function() {
   // ====== 多租户：解析当前 tenant slug ======
@@ -357,15 +399,35 @@
   var mobileDragStartPanX = 0, mobileDragStartPanY = 0;
 
   function applyMobileTransform() {
-    var $curPage = $mobileTrack.children('.mobile-page').eq(currentImg - 1);
-    $curPage.css('transform', 'translate(' + mobilePanX + 'px, ' + mobilePanY + 'px) scale(' + mobileZoom + ')');
+    if (mobileZoom === 1) {
+      // 缩放 1：track 负责横向翻页
+      $mobileTrack.css({
+        'transform': 'translateX(-' + ((currentImg - 1) * 100) + 'vw)',
+        'transition': 'transform 0.35s cubic-bezier(0.25,0.46,0.45,0.94)'
+      });
+      $mobileTrack.children('.mobile-page').css('transform', '');
+      $mobileViewport.removeClass('zooming');
+    } else {
+      // 缩放 >1：track 不动（保持当前页在 viewport），在当前 page 上 scale + pan
+      $mobileTrack.css({
+        'transform': 'translateX(-' + ((currentImg - 1) * 100) + 'vw)',
+        'transition': 'none'
+      });
+      var $curPage = $mobileTrack.children('.mobile-page').eq(currentImg - 1);
+      $curPage.css({
+        'transform': 'translate(' + mobilePanX + 'px, ' + mobilePanY + 'px) scale(' + mobileZoom + ')',
+        'transform-origin': '50% 50%',
+        'transition': 'none'
+      });
+      // 让 viewport 不裁切（zoom 时允许放大内容溢出）
+      $mobileViewport.addClass('zooming');
+    }
   }
 
   function clampMobilePan() {
     if (mobileZoom <= 1) { mobilePanX = 0; mobilePanY = 0; return; }
-    var $curPage = $mobileTrack.children('.mobile-page').eq(currentImg - 1);
-    var pw = $curPage.width() || window.innerWidth;
-    var ph = $curPage.height() || window.innerHeight;
+    var pw = window.innerWidth;
+    var ph = window.innerHeight;
     var maxX = (pw * (mobileZoom - 1)) / 2;
     var maxY = (ph * (mobileZoom - 1)) / 2;
     mobilePanX = Math.max(-maxX, Math.min(maxX, mobilePanX));
@@ -388,11 +450,10 @@
 
   function goImg(n) {
     n = Math.max(1, Math.min(n, TOTAL_IMGS));
-    var $prevPage = $mobileTrack.children('.mobile-page').eq(currentImg - 1);
-    $prevPage.css('transform', '');
     currentImg = n;
     mobileZoom = 1; mobilePanX = 0; mobilePanY = 0;
-    $mobileTrack.css('transform', 'translateX(-' + ((n - 1) * 100) + 'vw)');
+    // 翻页：交给 applyMobileTransform() 统一渲染 transform（横向偏移 + zoom + pan）
+    applyMobileTransform();
     $mPageInfo.text(n + ' / ' + TOTAL_IMGS);
     $mPrevBtn.prop('disabled', n <= 1);
     $mNextBtn.prop('disabled', n >= TOTAL_IMGS);
@@ -434,18 +495,33 @@
     buildMobileDots();
     goImg(1);
 
+    // 单指 swipe 翻页（仅在 zoom=1 时生效；zoom>1 时单指是拖动图）
+    var swipeStartX = 0, swipeStartY = 0, swipeStartTime = 0, isSwipeCandidate = false;
+    var SWIPE_MIN_DIST = 50;   // px
+    var SWIPE_MAX_TIME = 600;  // ms
+    var SWIPE_MAX_VERT = 80;   // 超过这个垂直位移就不算 swipe（避免误判滚动）
+
     $mobileViewport.on('touchstart', function(e) {
       if (e.touches.length === 2) {
-        isPinching = true; isMobileDrag = false;
+        isPinching = true; isMobileDrag = false; isSwipeCandidate = false;
         pinchStartDist = getTouchDistance(e.touches[0], e.touches[1]);
         pinchStartScale = mobileZoom;
         var center = getTouchCenter(e.touches[0], e.touches[1]);
         pinchCenterX = center.x; pinchCenterY = center.y;
         e.preventDefault();
-      } else if (e.touches.length === 1 && mobileZoom > 1) {
-        isMobileDrag = true; isPinching = false;
-        mobileDragStartX = e.touches[0].clientX; mobileDragStartY = e.touches[0].clientY;
-        mobileDragStartPanX = mobilePanX; mobileDragStartPanY = mobilePanY;
+        if (window.__zoomDebug) console.log('[zoom] pinch start, dist=' + pinchStartDist);
+      } else if (e.touches.length === 1) {
+        if (mobileZoom > 1) {
+          isMobileDrag = true; isPinching = false; isSwipeCandidate = false;
+          mobileDragStartX = e.touches[0].clientX; mobileDragStartY = e.touches[0].clientY;
+          mobileDragStartPanX = mobilePanX; mobileDragStartPanY = mobilePanY;
+        } else {
+          // zoom=1：单指 swipe 翻页候选
+          isMobileDrag = false; isPinching = false; isSwipeCandidate = true;
+          swipeStartX = e.touches[0].clientX;
+          swipeStartY = e.touches[0].clientY;
+          swipeStartTime = Date.now();
+        }
       }
     });
 
@@ -454,13 +530,16 @@
         e.preventDefault();
         var dist = getTouchDistance(e.touches[0], e.touches[1]);
         var scale = dist / pinchStartDist;
-        mobileZoom = Math.max(1, Math.min(pinchStartScale * scale, 5));
+        // 修复：双指捏合时 mobileZoom 不能被 Math.max(1) 锁回 1（捏合 < 1 应保留 < 1，
+        // 但 min 0.5 防过度缩小；放大时正常放）
+        mobileZoom = Math.max(0.5, Math.min(pinchStartScale * scale, 5));
         var center = getTouchCenter(e.touches[0], e.touches[1]);
         mobilePanX += center.x - pinchCenterX;
         mobilePanY += center.y - pinchCenterY;
         pinchCenterX = center.x; pinchCenterY = center.y;
         clampMobilePan();
         applyMobileTransform();
+        if (window.__zoomDebug) console.log('[zoom] pinch move, scale=' + scale.toFixed(2) + ', zoom=' + mobileZoom.toFixed(2));
         showMobileLabel(Math.round(mobileZoom * 100) + '%');
       } else if (e.touches.length === 1 && isMobileDrag) {
         e.preventDefault();
@@ -468,12 +547,30 @@
         mobilePanY = mobileDragStartPanY + (e.touches[0].clientY - mobileDragStartY);
         clampMobilePan();
         applyMobileTransform();
+      } else if (e.touches.length === 1 && isSwipeCandidate) {
+        // 阻止页面整体滚动
+        e.preventDefault();
       }
     }, { passive: false });
 
-    $mobileViewport.on('touchend', function() {
+    $mobileViewport.on('touchend', function(e) {
       if (isPinching) { isPinching = false; if (mobileZoom <= 1.05) resetMobileZoom(); }
       if (isMobileDrag) isMobileDrag = false;
+
+      if (isSwipeCandidate) {
+        // 找刚结束的 touch（changedTouches）
+        var t = (e.changedTouches && e.changedTouches[0]) || null;
+        if (t) {
+          var dx = t.clientX - swipeStartX;
+          var dy = t.clientY - swipeStartY;
+          var dt = Date.now() - swipeStartTime;
+          if (Math.abs(dx) > SWIPE_MIN_DIST && Math.abs(dy) < SWIPE_MAX_VERT && dt < SWIPE_MAX_TIME) {
+            if (dx < 0 && currentImg < TOTAL_IMGS) goImg(currentImg + 1); // 左滑 → 下一张
+            else if (dx > 0 && currentImg > 1) goImg(currentImg - 1);     // 右滑 → 上一张
+          }
+        }
+        isSwipeCandidate = false;
+      }
     });
 
     $mPrevBtn.on('click', function() { if (mobileZoom <= 1 && currentImg > 1) goImg(currentImg - 1); });
@@ -493,6 +590,57 @@
         showMobileLabel('200%');
       }
     });
+
+    // 移动端 +/- 按钮（与桌面端共享 #zoomCtl，桌面端绑在 desktop 块）
+    $('#zoomInBtn').on('click', function() {
+      mobileZoom = Math.min(mobileZoom + 0.25, 5);
+      var $curPage = $mobileTrack.children('.mobile-page').eq(currentImg - 1);
+      mobilePanX = 0; mobilePanY = 0; // 以中心缩放
+      clampMobilePan();
+      applyMobileTransform();
+      showMobileLabel(Math.round(mobileZoom * 100) + '%');
+    });
+    $('#zoomOutBtn').on('click', function() {
+      mobileZoom = Math.max(mobileZoom - 0.25, 1);
+      if (mobileZoom <= 1.05) { resetMobileZoom(); mobileZoom = 1; return; }
+      clampMobilePan();
+      applyMobileTransform();
+      showMobileLabel(Math.round(mobileZoom * 100) + '%');
+    });
+    $('#zoomResetBtn').on('click', function() {
+      resetMobileZoom(); mobileZoom = 1;
+    });
+
+    // ===== 兼容方案：wheel 缩放（覆盖 Windows 触屏多指不报 touches 的场景）=====
+    // Windows 触屏 / Chrome DevTools 模拟时，e.touches.length 永远 ≤ 1 → 双指 pinch 不工作。
+    // 任何滚轮 = 缩放。
+    // 用 vanilla addEventListener({passive:false}) —— jQuery 1.x 不支持 passive 选项，
+    // 而 Chrome 73+ 默认 wheel/touchmove 是 passive: true，jQuery 没法 override，
+    // 导致 e.preventDefault() 无效（页面整体 zoom 不能阻止）。
+    var _mvEl = $mobileViewport[0];
+    if (_mvEl && _mvEl.addEventListener) {
+      _mvEl.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        if (e.deltaY < 0) {
+          mobileZoom = Math.min(mobileZoom + 0.25, 5);
+          if (Math.abs(mobileZoom - 1.25) < 0.01) { mobilePanX = 0; mobilePanY = 0; }
+        } else {
+          mobileZoom = Math.max(mobileZoom - 0.25, 1);
+          if (mobileZoom <= 1.05) { resetMobileZoom(); mobileZoom = 1; return; }
+        }
+        clampMobilePan();
+        applyMobileTransform();
+        showMobileLabel(Math.round(mobileZoom * 100) + '%');
+      }, { passive: false });
+    }
+
+    // 首次进入提示：双指缩放 / 双击放大
+    if (!sessionStorage.getItem('zoom-hint-shown')) {
+      var $hint = $('<div class="zoom-hint" id="zoomHint"><svg viewBox="0 0 24 24"><path d="M9 11.75c-.69 0-1.25.56-1.25 1.25s.56 1.25 1.25 1.25 1.25-.56 1.25-1.25-.56-1.25-1.25-1.25zm6 0c-.69 0-1.25.56-1.25 1.25s.56 1.25 1.25 1.25 1.25-.56 1.25-1.25-.56-1.25-1.25-1.25zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8 0-.29.02-.58.05-.86 2.36-1.05 4.23-2.98 5.21-5.37C11.07 8.33 14.05 10 17.42 10c.78 0 1.53-.09 2.25-.26.21.71.33 1.47.33 2.26 0 4.41-3.59 8-8 8z"/></svg><span>双指捏合缩放 · 双击放大</span></div>').appendTo('body');
+      setTimeout(function() { $hint.addClass('show'); }, 300);
+      setTimeout(function() { $hint.removeClass('show'); setTimeout(function() { $hint.remove(); }, 500); }, 3500);
+      sessionStorage.setItem('zoom-hint-shown', '1');
+    }
   }
 
   // 移动端缩放标签
@@ -584,6 +732,10 @@
   // 浏览器本身对加载失败的 <img> 会显示 broken icon，用户可见即可。
   // 限制并发 6 个，给 OSS 留点余量。
   async function sanityCheckPages() {
+    // 用 new Image() 探测可达性（OSS 图片允许 <img> 跨域）
+    // 注意：jQuery + turn.js 1.x 在多图同时 load 时会冒泡 unhandled "o.handler.apply"
+    // 错误（来源是 turn.js 内部，非本函数）。本函数纯用原生 onload/onerror
+    // 不挂 DOM 不会额外触发该错误。
     var concurrency = 6;
     var queue = pages.slice();
     var results = [];
