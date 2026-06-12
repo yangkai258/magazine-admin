@@ -148,6 +148,82 @@ function callOnce(apiKey, payload) {
   });
 }
 
+// ============ v6.2 PDF 多图分析 ============
+//
+// 与 v6.0 generateMagazineSkeleton 共享同一 LLM 客户端 / 重试 / JSON 解析路径，
+// 区别仅在 system prompt + 输出 JSON 结构：
+//   - 输入：pdfPages = [{ page_index, image_path, mime, imageBuffer? }]
+//   - 输出：{ pages: [{ page_index, title, body }] }
+//   - 不需要 name / description（PDF 主题已隐含在文件里）
+//   - 长度必须等于 pdfPages.length
+//
+// 重要：MiniMax M3 是纯文本模型，**不能**直接把图片作为多模态输入（api 端点没有 vision）。
+// 所以 pdfPages 在 prompt 里只作为「占位说明」（page 1 / page 2 / ... + 文件路径），
+// 实际写作靠 LLM 的"画册编辑"通用能力 + 主题（由调用方传 `topic` 决定）。
+// 如果未来切换到多模态 LLM，可在 user message 改成 image_url 列表，schema 不动。
+
+function buildPdfSystemPrompt({ locale }) {
+  const lang = locale === 'en-US' ? 'English' : '简体中文';
+  return [
+    '你是一位资深画册编辑，擅长根据 PDF 多页结构给每页写中文标题 + 简介。',
+    `输出语言：${lang}。`,
+    '',
+    '【强约束】',
+    '1) 必须只输出一个合法 JSON 对象，不要任何额外文字、注释、Markdown 代码块、思考过程。',
+    '2) JSON 结构严格匹配：',
+    '   {',
+    '     "pages": [',
+    '       {"page_index": 1, "title": "<页标题，5-20 字>", "body": "<正稿，60-200 字，markdown 风格段落>"},',
+    '       {"page_index": 2, "title": "...", "body": "..."},',
+    '       ...',
+    '     ]',
+    '   }',
+    '3) page_index 从 1 起严格递增、连续整数、不重复，与输入页数完全一致。',
+    '4) pages 数组长度必须等于输入的 page_count。',
+    '5) 每个 body 必须是连贯段落（不是要点列表）；允许少量 markdown 强调（** 加粗）。',
+    '6) 标题与正文要契合页码顺序的自然叙述逻辑（封面 / 目录 / 章节 / 结语）。',
+    '7) 不得编造公司名 / 真人 / 数据；遵循 prompt 里给出的事实。',
+    '8) 不得返回任何系统说明、思考、警告、JSON 之外的字符。'
+  ].join('\n');
+}
+
+function buildPdfUserPrompt({ topic, pdfPages, totalPages }) {
+  const pageList = pdfPages.map(p => `  - page_index=${p.page_index} path=${p.image_path || '(inline)'}`).join('\n');
+  return [
+    topic ? `主题背景：${topic}` : '主题背景：（无；请根据 PDF 页数结构自由发挥，假设是常规公司/产品画册）',
+    `页数：${totalPages}`,
+    '',
+    '页面清单（按页码顺序）：',
+    pageList,
+    '',
+    '请严格按上面 JSON 结构输出 pages 数组。'
+  ].join('\n');
+}
+
+function validatePdfPagesResult(obj, expectedCount) {
+  if (!obj || typeof obj !== 'object') return 'LLM 未返回对象';
+  if (!Array.isArray(obj.pages) || obj.pages.length !== expectedCount) {
+    return `pages 数组长度必须等于 ${expectedCount}（实际 ${Array.isArray(obj.pages) ? obj.pages.length : '非数组'}）`;
+  }
+  for (let i = 0; i < obj.pages.length; i++) {
+    const p = obj.pages[i];
+    if (!p || typeof p !== 'object') return `pages[${i}] 不是对象`;
+    if (p.page_index !== i + 1) return `pages[${i}].page_index 必须等于 ${i + 1}（实际 ${p.page_index}）`;
+    if (typeof p.title !== 'string' || !p.title.trim()) return `pages[${i}].title 缺失`;
+    if (typeof p.body !== 'string' || p.body.trim().length < 30) return `pages[${i}].body 太短或缺失`;
+  }
+  return null;
+}
+
+function mockPdfPagesResult({ pdfPages }) {
+  const pages = pdfPages.map(p => ({
+    page_index: p.page_index,
+    title: `第 ${p.page_index} 页 · 章节展开`,
+    body: `（MOCK 第 ${p.page_index} 页）这是一段用于本地 e2e 的占位正文。LLM 未被调用——本次请求命中 MOCK_AI=1 分支，返回结构示例用于联调 PDF 解析 + 落库链路。真实接入后此段将由 MiniMax M3 根据 PDF 主题生成。`.padEnd(80, '。').slice(0, 180)
+  }));
+  return { pages };
+}
+
 // Mock 模式：返回固定 skeleton（不调真实 LLM）
 function mockSkeleton({ title, prompt, pageCount }) {
   const baseName = title && title.trim() ? title.trim() : (prompt.split(/[，。,.!?！？\n]/)[0] || '新画册').slice(0, 24);
@@ -261,8 +337,118 @@ async function generateMagazineSkeleton(opts = {}) {
   };
 }
 
+/**
+ * v6.2：分析 PDF 多页图，每页写 title + body
+ * @param {Object} opts
+ * @param {Array<{page_index:number, image_path?:string, mime?:string}>} opts.pdfPages
+ *        每页元数据（page_index 必填且从 1 起连续）
+ * @param {string} [opts.locale]  'zh-CN' | 'en-US'（默认 'zh-CN'）
+ * @param {string} [opts.topic]   主题背景（让 LLM 围绕主题写；空 = LLM 自由发挥）
+ * @returns {Promise<{pages:Array<{page_index:number,title:string,body:string}>, _meta:{model:string,duration_ms:number,retries:number,mock:boolean}}>}
+ */
+async function analyzePdfPages(opts = {}) {
+  const pdfPages = Array.isArray(opts.pdfPages) ? opts.pdfPages : [];
+  if (pdfPages.length === 0) throw new Error('pdfPages 不能为空');
+  // 规范化 + 排序校验
+  const sorted = pdfPages.slice().sort((a, b) => (a.page_index | 0) - (b.page_index | 0));
+  for (let i = 0; i < sorted.length; i++) {
+    if ((sorted[i].page_index | 0) !== i + 1) {
+      throw new Error(`pdfPages[${i}].page_index 必须等于 ${i + 1}（实际 ${sorted[i].page_index}）`);
+    }
+  }
+  const locale = opts.locale === 'en-US' ? 'en-US' : 'zh-CN';
+  const topic = (opts.topic || '').toString().trim().slice(0, 500);
+
+  const startedAt = Date.now();
+  const apiKey = process.env.MINIMAX_API_KEY;
+  const mockMode = process.env.MOCK_AI === '1' || !apiKey;
+
+  console.log(`[ai] analyzePdfPages start model=${MODEL} pages=${sorted.length} locale=${locale} mock=${mockMode} key=${maskKey(apiKey)}`);
+
+  let retries = 0;
+  let rawContent = null;
+  let lastErr = null;
+
+  if (mockMode) {
+    const obj = mockPdfPagesResult({ pdfPages: sorted });
+    const duration_ms = Date.now() - startedAt;
+    console.log(`[ai] analyzePdfPages end mock duration_ms=${duration_ms} pages=${obj.pages.length}`);
+    return {
+      pages: obj.pages.map(p => ({ page_index: p.page_index, title: p.title.trim(), body: p.body.trim() })),
+      _meta: { model: MODEL + ':mock', duration_ms, retries, mock: true }
+    };
+  }
+
+  const payload = {
+    model: MODEL,
+    temperature: 0.5,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: buildPdfSystemPrompt({ locale }) },
+      { role: 'user', content: buildPdfUserPrompt({ topic, pdfPages: sorted, totalPages: sorted.length }) }
+    ]
+  };
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      rawContent = await callOnce(apiKey, payload);
+      break;
+    } catch (e) {
+      lastErr = e;
+      const willRetry = attempt < MAX_RETRIES;
+      console.warn(`[ai] analyzePdfPages attempt ${attempt}/${MAX_RETRIES} failed: ${e.message}${willRetry ? `, retry in ${BACKOFF_MS[attempt - 1]}ms` : ''}`);
+      if (willRetry) {
+        retries++;
+        await sleep(BACKOFF_MS[attempt - 1]);
+      }
+    }
+  }
+
+  if (!rawContent) {
+    const msg = `MiniMax 调用失败（analyzePdfPages，已重试 ${retries} 次）: ${lastErr ? lastErr.message : 'unknown'}`;
+    console.error('[ai] analyzePdfPages fail', msg);
+    throw new Error(msg);
+  }
+
+  const obj = extractJson(rawContent);
+  if (!obj) {
+    const msg = `MiniMax 返回内容无法解析为 JSON（analyzePdfPages，已重试 ${retries} 次）`;
+    console.error('[ai] analyzePdfPages json-parse-fail raw=', rawContent.slice(0, 300));
+    throw new Error(msg);
+  }
+  const validationErr = validatePdfPagesResult(obj, sorted.length);
+  if (validationErr) {
+    const msg = `MiniMax 返回结构校验失败（analyzePdfPages）: ${validationErr}`;
+    console.error('[ai] analyzePdfPages validation-fail obj=', JSON.stringify(obj).slice(0, 300));
+    throw new Error(msg);
+  }
+
+  const duration_ms = Date.now() - startedAt;
+  console.log(`[ai] analyzePdfPages end duration_ms=${duration_ms} retries=${retries} pages=${obj.pages.length}`);
+
+  return {
+    pages: obj.pages.map(p => ({
+      page_index: p.page_index,
+      title: p.title.trim(),
+      body: p.body.trim()
+    })),
+    _meta: { model: MODEL, duration_ms, retries, mock: false }
+  };
+}
+
 module.exports = {
   generateMagazineSkeleton,
+  analyzePdfPages,
   // 仅供单测 / 调试：
-  _internal: { extractJson, validateSkeleton, buildSystemPrompt, buildUserPrompt, mockSkeleton }
+  _internal: {
+    extractJson,
+    validateSkeleton,
+    validatePdfPagesResult,
+    buildSystemPrompt,
+    buildUserPrompt,
+    buildPdfSystemPrompt,
+    buildPdfUserPrompt,
+    mockSkeleton,
+    mockPdfPagesResult
+  }
 };

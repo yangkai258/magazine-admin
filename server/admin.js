@@ -581,6 +581,257 @@ app.post('/api/admin/ai/skeleton', auth.requireRole('owner'), async (req, res) =
   });
 });
 
+// ========== v6.2 PDF 智能解析 → 自动建画册 ==========
+// POST /api/admin/magazines/import-pdf
+//   auth: owner
+//   body: multipart/form-data, field name = 'pdf', file = application/pdf
+//   行为：multer memory 接 PDF → pdf-parser.js 抽前 N 页 PNG → 写本地 uploads/skeleton/<newId>/
+//         → ai-client.analyzePdfPages({ pdfPages }) 让 LLM 给每页写 title+body
+//         → createMagazine(enabled=0) + addPages（is_skeleton=true）
+//         → 审计 ai_pdf_import
+//   降级路径（ERR_PDF_RENDER_DEP_MISSING / ERR_PDF_RENDER_FAILED）：
+//     - 不阻断 200：仍创建 enabled=0 空壳 magazine + 0 页 + warning 字段
+//     - 让 owner 看到「PDF 解析失败」+ 引导手动上传图
+//   限速：继承 v6.1 ai_skeleton 桶（PDF 调用算 1 次/天）
+const PDF_MAX_PAGES = Math.max(1, Number(process.env.PDF_MAX_PAGES) || 30);
+const PDF_MAX_FILE_BYTES = Math.max(1024 * 1024, Number(process.env.PDF_MAX_FILE_MB) * 1024 * 1024 || 60 * 1024 * 1024);  // 默认 60MB
+const { parsePdfToPages, PdfRenderError } = require('./pdf-parser');
+
+app.post('/api/admin/magazines/import-pdf', auth.requireRole('owner'), (req, res, next) => {
+  // multer 单独限 PDF 大小；其它文件类型（image/jpeg 等）一律拒
+  const pdfUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: PDF_MAX_FILE_BYTES, files: 1 },
+    fileFilter: (req, file, cb) => {
+      // 兼容：浏览器不一定给 application/pdf（macOS Safari 给 application/x-pdf 等）
+      const okByMime = file.mimetype === 'application/pdf';
+      const okByName = /\.pdf$/i.test(file.originalname || '');
+      if (okByMime || okByName) return cb(null, true);
+      cb(new Error('UNSUPPORTED_MEDIA_TYPE: 仅支持 PDF 文件'));
+    }
+  }).single('pdf');
+  pdfUpload(req, res, (multerErr) => {
+    if (multerErr) {
+      if (multerErr.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'PDF 文件超过 ' + Math.round(PDF_MAX_FILE_BYTES / 1024 / 1024) + 'MB 上限' });
+      }
+      if (/UNSUPPORTED_MEDIA_TYPE/.test(multerErr.message)) {
+        return res.status(415).json({ error: '仅支持 PDF 文件' });
+      }
+      return res.status(400).json({ error: '文件上传失败: ' + multerErr.message });
+    }
+    if (!req.file) return res.status(400).json({ error: '请上传 PDF 文件（字段名 pdf）' });
+
+    handleImportPdf(req, res).catch(e => {
+      console.error('[import-pdf] unhandled:', e && e.stack ? e.stack : e);
+      res.status(500).json({ error: 'import-pdf 内部错误: ' + (e && e.message ? e.message : '未知错误') });
+    });
+  });
+});
+
+async function handleImportPdf(req, res) {
+  const tenantId = req.tenant.id;
+  const startedAt = Date.now();
+  const pdfBuffer = req.file.buffer;
+  const pdfSize = pdfBuffer.length;
+
+  // ============ v6.1 限速（PDF 调用也算 ai_skeleton 一次）============
+  const rl = rateLimit.checkAndIncrement(tenantId, 'ai_skeleton', AI_DAILY_LIMIT, AI_DAILY_WINDOW_MS);
+  const remaining = Math.max(0, rl.limit - rl.current);
+  res.setHeader('X-RateLimit-Limit', String(rl.limit));
+  res.setHeader('X-RateLimit-Remaining', String(remaining));
+  res.setHeader('X-RateLimit-Reset', rl.resetAt);
+  if (!rl.allowed) {
+    auth.audit(req, 'ai_rate_limited', {
+      tenant_id: tenantId,
+      target_type: 'tenant',
+      target_id: tenantId,
+      details: {
+        action_blocked: 'import_pdf',
+        limit: rl.limit,
+        current: rl.current,
+        reset_at: rl.resetAt,
+        pdf_bytes: pdfSize
+      }
+    });
+    return res.status(429).json({
+      error: `已达今日 AI 生成上限（${rl.limit} 次），明天 0 点重置`,
+      current: rl.current,
+      limit: rl.limit,
+      resetAt: rl.resetAt
+    });
+  }
+
+  // ============ Step 1: PDF → pages（带降级）============
+  let pages = [];
+  let pdfParseWarning = null;
+  let pdfParseDuration = 0;
+  try {
+    const t0 = Date.now();
+    pages = await parsePdfToPages({ buffer: pdfBuffer, maxPages: PDF_MAX_PAGES });
+    pdfParseDuration = Date.now() - t0;
+  } catch (e) {
+    pdfParseDuration = Date.now() - startedAt;
+    if (e instanceof PdfRenderError && e.code === 'ERR_PDF_RENDER_DEP_MISSING') {
+      // 沙箱 / 镜像漏装 canvas：把具体报错写日志 + 写 audit + 仍创建空壳 magazine
+      console.warn('[import-pdf] PDF render dep missing (canvas binary not built). Returning empty draft magazine. cause:', e.message);
+      pdfParseWarning = 'PDF 渲染依赖未安装（canvas native binary 缺失）；请在 Linux 镜像或装好 libpng+cairo+Python+MSVC 的 Windows 上重试，详见 README §PDF 依赖。';
+    } else {
+      console.error('[import-pdf] PDF parse failed:', e && e.stack ? e.stack : e);
+      pdfParseWarning = 'PDF 解析失败: ' + (e && e.message ? e.message : String(e));
+    }
+  }
+
+  // ============ Step 2: 准备 skeleton 目录 + 写 PNG ============
+  // 先 createMagazine 拿 ID（即便后续降级也要有 magazine 落库）
+  const today = new Date().toISOString().slice(0, 10);
+  // 用 PDF 文件名（去扩展名）+ 日期做初始 title，AI 成功后会被覆盖
+  const baseName = (req.file.originalname || '未命名 PDF')
+    .replace(/\.pdf$/i, '')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .slice(0, 60) || '未命名 PDF';
+  const initialName = baseName + '（PDF 草稿）';
+  const magazine = db.createMagazine(tenantId, {
+    name: initialName,
+    upload_date: today,
+    description: '由 PDF 智能解析自动创建（v6.2）' + (pdfParseWarning ? ' — ' + pdfParseWarning : ''),
+    cover_pc: '',
+    cover_mobile: '',
+    enabled: 0
+  });
+
+  // 本地 skeleton 目录
+  const fs = require('fs');
+  const path = require('path');
+  const skelDir = path.join(__dirname, '..', 'uploads', 'skeleton', String(magazine.id));
+  try { fs.mkdirSync(skelDir, { recursive: true }); } catch (e) { /* best effort */ }
+
+  const writtenPages = [];
+  if (pages.length > 0) {
+    for (const p of pages) {
+      const filename = 'page-' + String(p.index).padStart(3, '0') + '.png';
+      const filepath = path.join(skelDir, filename);
+      try {
+        fs.writeFileSync(filepath, p.imageBuffer);
+        writtenPages.push({ index: p.index, image_path: '/uploads/skeleton/' + magazine.id + '/' + filename, mime: p.mime });
+      } catch (e) {
+        console.error('[import-pdf] failed to write', filepath, e.message);
+      }
+    }
+  }
+
+  // ============ Step 3: AI 给每页写 title+body（带降级）============
+  let aiResult = null;
+  let aiWarning = null;
+  let aiDuration = 0;
+  if (writtenPages.length > 0) {
+    try {
+      const t0 = Date.now();
+      aiResult = await aiClient.analyzePdfPages({
+        pdfPages: writtenPages.map(p => ({ page_index: p.index, image_path: p.image_path, mime: p.mime })),
+        locale: 'zh-CN',
+        topic: ''  // v6.2 不强制主题；让 LLM 自由发挥
+      });
+      aiDuration = Date.now() - t0;
+    } catch (e) {
+      console.error('[import-pdf] analyzePdfPages failed:', e && e.stack ? e.stack : e);
+      aiWarning = 'AI 分析失败: ' + (e && e.message ? e.message : String(e));
+    }
+  }
+
+  // ============ Step 4: 用 AI 结果回填 title/body，addPages 落库 ============
+  // 把 aiResult.pages（[{page_index, title, body}]）映射回 writtenPages（按 page_index 对齐）
+  const titleByIndex = new Map();
+  if (aiResult && Array.isArray(aiResult.pages)) {
+    for (const ap of aiResult.pages) {
+      if (ap && typeof ap.page_index === 'number') titleByIndex.set(ap.page_index, ap);
+    }
+  }
+  // 1) 更新 magazine.name / description（用第一页的 title + 一段说明）
+  if (aiResult && aiResult.pages.length > 0) {
+    const first = aiResult.pages[0];
+    if (first && first.title) {
+      magazine.name = first.title + (writtenPages.length > 1 ? '（' + writtenPages.length + ' 页）' : '');
+      magazine.description = '由 PDF 智能解析自动创建（v6.2，' + (aiResult._meta.mock ? 'mock' : 'MiniMax-M3') + '）';
+      db.updateMagazine(magazine.id, { name: magazine.name, description: magazine.description }, { tenantId });
+    }
+  }
+
+  // 2) addPages（如果有解析出来的页）
+  let savedPages = [];
+  if (writtenPages.length > 0) {
+    const pageInputs = writtenPages.map(wp => {
+      const ai = titleByIndex.get(wp.index);
+      return {
+        image_path: wp.image_path,
+        title: (ai && ai.title) ? ai.title : ('第 ' + wp.index + ' 页'),
+        body: (ai && ai.body) ? ai.body : '',
+        is_skeleton: true
+      };
+    });
+    try {
+      savedPages = db.addPages(tenantId, magazine.id, pageInputs);
+    } catch (e) {
+      console.error('[import-pdf] addPages failed, rolling back magazine', magazine.id, e && e.stack ? e.stack : e);
+      try { db.deleteMagazine(magazine.id, { tenantId }); } catch (e2) { console.error('[import-pdf] rollback deleteMagazine failed:', e2 && e2.message); }
+      // 清理 skeleton 目录
+      try { fs.rmSync(skelDir, { recursive: true, force: true }); } catch (_) {}
+      return res.status(500).json({ error: '落库失败，已回滚: ' + (e && e.message ? e.message : '未知错误') });
+    }
+  }
+
+  const totalDuration = Date.now() - startedAt;
+
+  // ============ Step 5: 审计 ============
+  auth.audit(req, 'ai_pdf_import', {
+    tenant_id: tenantId,
+    target_type: 'magazine',
+    target_id: magazine.id,
+    details: {
+      pdf_bytes: pdfSize,
+      pdf_filename: req.file.originalname,
+      pdf_pages_count: writtenPages.length,
+      pdf_max_pages: PDF_MAX_PAGES,
+      pdf_parse_warning: pdfParseWarning,
+      ai_model: aiResult ? aiResult._meta.model : null,
+      ai_retries: aiResult ? aiResult._meta.retries : null,
+      ai_warning: aiWarning,
+      ai_duration_ms: aiDuration,
+      pdf_parse_duration_ms: pdfParseDuration,
+      total_duration_ms: totalDuration,
+      mock: aiResult ? !!aiResult._meta.mock : null,
+      rate_remaining: remaining
+    }
+  });
+
+  // 警告合并
+  const warnings = [pdfParseWarning, aiWarning].filter(Boolean);
+
+  res.json({
+    magazine: db.getMagazine(magazine.id, { tenantId }),
+    pages: savedPages,
+    pdf_meta: {
+      filename: req.file.originalname,
+      bytes: pdfSize,
+      pages_extracted: writtenPages.length,
+      max_pages: PDF_MAX_PAGES,
+      parse_duration_ms: pdfParseDuration
+    },
+    llm_meta: aiResult ? {
+      model: aiResult._meta.model,
+      duration_ms: aiResult._meta.duration_ms,
+      retries: aiResult._meta.retries,
+      mock: !!aiResult._meta.mock
+    } : null,
+    rate_limit: {
+      limit: rl.limit,
+      remaining: remaining,
+      reset_at: rl.resetAt
+    },
+    warning: warnings.length ? warnings.join(' | ') : null
+  });
+}
+
 // ========== Reader 端分析（看板） ==========
 app.get('/api/admin/analytics', auth.requireAuth, (req, res) => {
   const since = req.query.since || new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
