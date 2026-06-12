@@ -117,6 +117,17 @@
       "cover_mobile": "",
       "enabled": 0,
       "created_at": "2026-06-12T06:01:20.096Z"
+    },
+    {
+      "id": 3,
+      "tenant_id": 1,
+      "name": "【PDF 草稿示例】2026-06-12-07-19-30",
+      "upload_date": "2026-06-12",
+      "description": "由 v6.2 PDF 智能解析端点（POST /api/admin/magazines/import-pdf）mock 出来的骨架草稿，演示 PDF→图→LLM 写标题简介→落库为草稿 magazine 的端到端链路。",
+      "cover_pc": "",
+      "cover_mobile": "",
+      "enabled": 0,
+      "created_at": "2026-06-12T07:19:30.908Z"
     }
   ],
   "pages": [
@@ -1065,6 +1076,39 @@
       "body": "官方网址 + 客服电话 + 二维码。AI 占位。",
       "is_skeleton": true,
       "created_at": "2026-06-12T06:01:20.099Z"
+    },
+    {
+      "id": 88,
+      "tenant_id": 1,
+      "magazine_id": 3,
+      "page_order": 1,
+      "image_path": "uploads/skeleton/3/page-1.png",
+      "title": "（PDF MOCK）第 1 页 — 自动生成标题",
+      "body": "（PDF MOCK）这是第 1 页的占位正稿，由 analyzePdfPages mock 路径生成。真实接入 MiniMax-M3 后此段将由 LLM 看图生成。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。",
+      "is_skeleton": true,
+      "created_at": "2026-06-12T07:19:30.914Z"
+    },
+    {
+      "id": 89,
+      "tenant_id": 1,
+      "magazine_id": 3,
+      "page_order": 2,
+      "image_path": "uploads/skeleton/3/page-2.png",
+      "title": "（PDF MOCK）第 2 页 — 自动生成标题",
+      "body": "（PDF MOCK）这是第 2 页的占位正稿，由 analyzePdfPages mock 路径生成。真实接入 MiniMax-M3 后此段将由 LLM 看图生成。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。",
+      "is_skeleton": true,
+      "created_at": "2026-06-12T07:19:30.914Z"
+    },
+    {
+      "id": 90,
+      "tenant_id": 1,
+      "magazine_id": 3,
+      "page_order": 3,
+      "image_path": "uploads/skeleton/3/page-3.png",
+      "title": "（PDF MOCK）第 3 页 — 自动生成标题",
+      "body": "（PDF MOCK）这是第 3 页的占位正稿，由 analyzePdfPages mock 路径生成。真实接入 MiniMax-M3 后此段将由 LLM 看图生成。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。",
+      "is_skeleton": true,
+      "created_at": "2026-06-12T07:19:30.914Z"
     }
   ],
   "covers": [
@@ -1436,6 +1480,33 @@
       },
       "ip": "127.0.0.1",
       "user_agent": "seed-v6-evidence/1.0 (v6.1 任务回填)"
+    },
+    {
+      "id": 20,
+      "timestamp": "2026-06-12T07:19:30.918Z",
+      "actor_user_id": 1,
+      "actor_user_email": "admin@zhuobao.local",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": false,
+      "actor_role": "owner",
+      "tenant_id": 1,
+      "action": "ai_pdf_import",
+      "target_type": "magazine",
+      "target_id": 3,
+      "details": {
+        "pdf_pages_count": 3,
+        "prompt_chars": 0,
+        "model": "MiniMax-M3",
+        "retries": 0,
+        "mock": true,
+        "duration_ms": 12,
+        "rate_remaining": 19,
+        "truncated": false,
+        "strategy": "inline-mock (pdf-img-convert not installed)"
+      },
+      "ip": "127.0.0.1",
+      "user_agent": "test-pdf-import/1.0 (v6.2 任务 e2e)"
     }
   ],
   "reader_analytics": [

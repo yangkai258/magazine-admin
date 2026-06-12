@@ -723,5 +723,271 @@ action IN ('ai_generate_skeleton', 'ai_rate_limited')
 
 ---
 
+## v6.2 增量 — PDF 智能解析 → 自动建画册
+
+### 范围
+
+**做**：
+- owner 在后台拖拽 / 选择 PDF → 后端自动抽每页转 PNG → 调 LLM 给每页写标题 + 简介 → 落库为草稿 magazine（`enabled=0`，待用户后续手动配图调整）
+- 落地后的图存本地 `uploads/skeleton/<id>/page-N.png`（**草稿不上 OSS**）
+- 仍受 v6.1 AI 限速约束（每租户 20 次/天，PDF 调用算 1 次/天）
+- 复用 v6.0 端点 `POST /api/admin/ai/skeleton` 的部分基础设施（限速 / 审计 / mock）
+
+**不做**（明确砍掉，留 v6.3+）：
+- ❌ OSS 上传 / 草稿直接上云（草稿不上云，保持本地化快速迭代）
+- ❌ 多租户共享 PDF（PDF 仅限本租户 owner 上传，不进平台级 PDF 库）
+- ❌ OCR 文字层（PDF → 图 → LLM 视觉理解，**不**走 OCR 文本抽取；v6.3+ 评估）
+- ❌ PDF 模板中心 / PDF 风格选择（v6.0 砍掉的 AI 选模板路线，PDF 版暂不做）
+- ❌ 加密 PDF 自动破解（检测到加密 → 直接报错，**不**尝试爆破）
+- ❌ 实时流式进度（前端 XHR onprogress 只能看到 upload 阶段；AI 解析阶段黑盒，等到 200 后才看到结果）
+
+### 依赖
+
+| 包 | 用途 | 为什么选它 |
+|----|------|----------|
+| `pdf-img-convert` | PDF → PNG buffer（纯 JS） | 免装 ghostscript；Windows 直接 `npm install` 装上；输出 PNG buffer 不用中间落盘 |
+| `multer`（已有） | 接收 `multipart/form-data` 的 PDF 文件 | 已有 v4 文件上传链路 |
+
+**明确不引**：
+- ❌ `pdf2pic`：要 ghostscript，Windows 装 chain 痛苦
+- ❌ `pdfjs-dist`：要 node-canvas，太重；纯 Node 后端不需要把 PDF 渲染到 canvas
+
+**npm install 失败降级**：如果 `pdf-img-convert` 安装失败，README 注明手动步骤 + 端点允许 `pdf_pages=0`（用户后续手动上传图），**不**让端点整体 503。
+
+### 新端点：`POST /api/admin/magazines/import-pdf`
+
+**Auth**：`auth.requireRole('owner')`（editor / viewer 拒绝 403；未登录 401）。
+
+**Request**：`multipart/form-data`，单一字段 `pdf`：
+- Content-Type: `application/pdf` 或 `application/octet-stream`
+- 大小上限：50 MB（multer limits）
+- 文件名：原样保留到 `image_path` 元数据（不直接拼 URL，**不**做 OSS 上传）
+
+**后端处理流程**：
+```
+1. multer 接收 PDF → req.file.buffer
+2. 调 pdf-parser.parsePdfToPages({ buffer, maxPages: PDF_MAX_PAGES })
+   → [{ index, imageBuffer, mime }]   // 截断到 30 页（PDF_MAX_PAGES 默认 30）
+3. 本地落图：mkdir -p uploads/skeleton/<newId>/
+            writeFileSync(page-N.png, imageBuffer)
+4. 限速检查：rateLimit.checkAndIncrement(tenant.id, 'ai_skeleton', ...)
+   → 失败 → 429 + 写 audit ai_rate_limited
+5. 调 aiClient.analyzePdfPages({ pdfPages: [{ image_path, page_index }], locale })
+   → LLM 看图给每页写 title + body
+   → 复用 v6.0 mock（process.env.MOCK_AI=1）路径
+6. createMagazine(enabled=0) + addPages(每个 page 带 title/body + 本地图路径)
+7. 写 audit_log action='ai_pdf_import' details.pdf_pages_count=N
+8. 返回 { magazine, pages }，结构同 v6.0
+```
+
+**200 OK**：
+```json
+{
+  "magazine": { "id": 124, "name": "...", "description": "...", "enabled": 0, "tenant_id": 1, "upload_date": "2026-06-12", "cover_pc": "", "cover_mobile": "" },
+  "pages": [
+    { "id": 457, "page_order": 1, "image_path": "uploads/skeleton/124/page-1.png", "title": "...", "body": "...", "is_skeleton": true }
+  ],
+  "llm_meta": { "model": "MiniMax-M3", "duration_ms": 4321, "retries": 0, "pdf_pages_count": 8 }
+}
+```
+
+**4xx / 5xx**：
+- `400`：非 PDF 文件 / 文件大小超 50MB
+- `401`：未登录
+- `403`：当前角色不是 owner
+- `429`：限速命中（v6.1 标准 429 body + 响应头）
+- `500 MINIMAX_API_KEY not configured`：env 缺失（同 v6.0）
+- `500 PDF_PARSE_ERROR`：加密 PDF / 解析异常
+- `500 PDF_TOO_MANY_PAGES`：超 maxPages 截断（实际是静默截断 + 在 audit 标 `truncated: true`）
+- `500 AI_PARSE_ERROR`：LLM 3 次重试后仍 JSON 解析失败
+- `500 AI_UPSTREAM_ERROR` / `AI_UPSTREAM_TIMEOUT` / `AI_UPSTREAM_5XX`：同 v6.0
+
+### 服务端模块：`server/pdf-parser.js`
+
+**导出**：
+```js
+async function parsePdfToPages({ buffer, maxPages = 30 }) → [{ index, imageBuffer, mime }]
+async function writePdfPagesToDisk({ pages, targetDir }) → [{ index, imagePath, filename }]
+```
+
+**实现要点**：
+```js
+const { convert } = require('pdf-img-convert');
+const pngPages = await convert(buffer, { width: 1200 });  // 输出 array of Buffer
+return pngPages.slice(0, maxPages).map((buf, i) => ({
+  index: i + 1,
+  imageBuffer: buf,
+  mime: 'image/png'
+}));
+```
+
+**失败检测**（在调 `convert` 之前先做防御）：
+- `buffer.slice(0, 5).toString('ascii')` 不以 `%PDF-` 开头 → 抛 `PDF_PARSE_ERROR`
+- `convert` 抛 `password required` / `encrypted` → 抛 `PDF_PARSE_ERROR: ENCRYPTED`
+- 解析出 0 页 → 抛 `PDF_PARSE_ERROR: EMPTY`
+
+### 复用：`server/ai-client.js` 新增 `analyzePdfPages`
+
+**不**改 v6.0 `generateMagazineSkeleton`（避免 breaking change）。新增独立函数：
+
+```js
+async function analyzePdfPages({ pdfPages, locale }) → {
+  pages: [{ page_order, title, body }],
+  _meta: { model, duration_ms, retries, mock }
+}
+```
+
+**System Prompt 强约束**：
+```
+你是资深画册编辑，**只看图说话**，严格按以下 JSON 结构输出：
+{
+  "pages": [
+    { "page_order": 1, "title": "5-20 字页标题", "body": "100-300 字正稿" },
+    ...
+  ]
+}
+约束：
+1) pages 长度必须等于输入 pdfPages.length
+2) 严格按 page_index 升序输出
+3) 不得编造图中没有的信息
+4) 不输出 JSON 之外任何字符
+```
+
+**Mock 模式**（`MOCK_AI=1`）：返回固定 `pages` 数组（每页 title=`第 N 页（PDF MOCK）`、body=占位正稿），跟 v6.0 mock 一致。
+
+**Retry 策略**：同 v6.0（5s / 15s / 30s 退避，最多 3 次）。JSON 校验失败 → 抛 `AI_PARSE_ERROR`。
+
+### 落库与本地存储
+
+**目录约定**：
+```
+uploads/
+└── skeleton/
+    └── <magazine-id>/
+        ├── page-1.png
+        ├── page-2.png
+        └── ...
+```
+
+**`pages` 表 schema 不变**（v6 schema）：`image_path` 字段存相对路径 `uploads/skeleton/<id>/page-N.png`（同 v6.0 v5 既有约定，**不**用 OSS URL）。
+
+**`.gitignore` 更新**：
+```
+uploads/skeleton/
+```
+（草稿页不上 git，避免二进制污染）
+
+**前端访问**：admin 端用 `/uploads/skeleton/<id>/page-N.png` 走 express static 暴露（`public/uploads` 已挂载，`uploads/` 也在 `server/index.js` 静态目录）。
+
+### 限速
+
+**复用 v6.1 限速器**：`rateLimit.checkAndIncrement(tenant.id, 'ai_skeleton', AI_DAILY_LIMIT, AI_DAILY_WINDOW_MS)`。
+
+- PDF 调用 **算 1 次/天**（不单独算，按 `ai_skeleton` 同桶）
+- 429 响应 + 响应头同 v6.1
+- 限速拒绝时**不**消耗配额；通过路径 audit `details.pdf_pages_count` 字段标识 PDF 路径
+
+### 审计
+
+每次成功 / 失败 PDF 导入都写 `audit_log`：
+
+| 场景 | action | details 关键字段 |
+|------|--------|------------------|
+| 限速通过 + LLM 成功 | `ai_pdf_import` | `pdf_pages_count`, `prompt_chars`（固定 0，无 prompt）, `model`, `mock`, `duration_ms`, `retries`, `rate_remaining`, `truncated`（bool） |
+| 限速拒绝 | `ai_rate_limited` | 同 v6.1，附加 `action_blocked: 'ai_pdf_import'` |
+| 限速通过 + LLM 失败 | `ai_pdf_import`（details.error 写入） | 额外 `error: 'AI_PARSE_ERROR'` 等 |
+| PDF 解析失败 | `ai_pdf_import_failed` | `reason: 'PDF_PARSE_ERROR'`, `error: 'ENCRYPTED'` 等 |
+| 限速通过 + `addPages` 失败 | `ai_pdf_import`（回滚 magazine） | 额外 `rolled_back: true` |
+
+> **v6.1 遗留**：`ai_pdf_import_failed` 是 v6.2 新增的失败 audit，让大屏能统计 PDF 解析失败。但 v6.0 失败分支不补 audit（v6.1 接受）。大屏的 `failed` 计数仍可能 0 → UI 空态。
+
+### 前端页：`public/admin/ai-pdf.html`
+
+**位置**：admin 后台独立页（**不**嵌入既有 iframe）。
+
+**4 段布局**：
+1. **拖拽区**（顶部）：`<div class="drop-zone" accept=".pdf">` 监听 `dragenter` / `dragover` / `drop`；drop 时 accept 检查（不是 PDF → 提示错误）；显示文件名 + 大小
+2. **进度条**（中部）：调用 `api.aiPdfImport(file, onProgress)` 期间
+   - "上传中… {percent}%"（XHR `upload.onprogress`）
+   - "AI 解析中…"（后端 PDF 解析 + LLM 阶段，前端黑盒）
+   - 错误条（401/403/400/500 区分提示）
+3. **骨架预览**（解析完成后）：同 `ai-generate.html` 模式（4 数字卡 + 页列表）
+4. **落库跳转按钮**（底部）：「应用到杂志列表」→ 跳 `/admin/magazine/list.html?highlight=<id>`
+
+**XSS 防护**：PDF 文件名、LLM 返回 title/body 一律 `textContent` 渲染，禁止 `.innerHTML = userInput`（同 v6.0）。
+
+**API 客户端**（`public/admin/js/api.js` 末尾追加）：
+```js
+api.aiPdfImport = (file, onProgress) => {
+  // 用 XHR 不用 fetch（fetch 不支持 onprogress）
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const form = new FormData();
+    form.append('pdf', file);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
+    };
+    xhr.onload = () => { /* 200/4xx/5xx 处理，透传 err.message */ };
+    xhr.onerror = () => reject(new Error('网络错误'));
+    xhr.open('POST', '/api/admin/magazines/import-pdf', true);
+    xhr.send(form);
+  });
+};
+```
+
+**nav.js 入口**：在 `ai-generate` 后插入 `ai-pdf` 项（key=`ai-pdf`，label=「📄 AI PDF 一键生成」，icon=`file-text`，role=`owner`）。
+
+### 失败模式
+
+| 场景 | 行为 | 状态码 |
+|------|------|--------|
+| `MINIMAX_API_KEY` 未设 | 端点直接 500 + 明确错误 | 500 |
+| 非 PDF 文件（magic bytes 不对） | 拒绝 + 明确错误 | 400 |
+| 加密 PDF | 抛 `PDF_PARSE_ERROR: ENCRYPTED` | 500 |
+| 0 页 PDF | 抛 `PDF_PARSE_ERROR: EMPTY` | 500 |
+| PDF > 30 页 | **静默截断**到 30 页 + audit `truncated: true`（不报错） | 200 |
+| PDF 50MB+ | multer 拦截 | 400 |
+| `pdf-img-convert` npm 装失败 | 端点 503 + 降级路径提示前端「请改用 AI 一句话生成」 | 503 |
+| MiniMax 5xx | 退避重试 5s/15s/30s，3 次仍失败 | 503 |
+| JSON parse 失败 | 退避重试，3 次仍失败 | 500 AI_PARSE_ERROR |
+| LLM 成功但 `addPages` 失败 | 回滚已建的 magazine（deleteMagazine） | 500 |
+| 限速命中 | 429 + 写 `audit_log ai_rate_limited` | 429 |
+| `req.file` 为空（用户没传文件） | 400 | 400 |
+
+### Env 变量
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `PDF_MAX_PAGES` | `30` | PDF 解析最大页数（env 缺失 / 非整数 / ≤ 0 → fallback 30） |
+| `MOCK_AI` | `0` | 复用 v6.0 mock 开关；mock 模式也走限速（同配额） |
+| `AI_DAILY_LIMIT` | `20` | 复用 v6.1 限速上限（PDF 调用算 1 次/天） |
+
+### 非目标（v6.2 明确不做）
+
+- ❌ **OSS 上传**（草稿不上云，保持本地 `uploads/skeleton/`）
+- ❌ **多租户共享 PDF**（每租户 owner 仅管自己上传的 PDF）
+- ❌ **OCR 文字层**（v6.3+ 评估；本期纯视觉理解）
+- ❌ **PDF 模板中心**（v6.0 砍掉的 AI 选模板路线，PDF 版暂不做）
+- ❌ **加密 PDF 自动破解**（检测到加密 → 直接报错，不尝试爆破）
+- ❌ **PDF 二次编辑**（生成后用户只能改 title/body，图不能换；v6.3+ 考虑加"重新生成第 N 页"）
+- ❌ **跨页内容引用**（LLM 不被允许跨页拼接信息；只看单页图说话）
+- ❌ **PDF 实时预览**（上传前不显示 PDF 首页缩略图，v6.3+ 可加 `pdf.js` 客户端预览）
+
+### v6.3 候选
+
+1. **OCR 文字层**：PDF → 文字层抽取 + LLM 视觉理解双轨合并，文字稿可被搜索 / 复制
+2. **PDF 客户端预览**：上传前用 `pdf.js` 显示首页缩略图，减少误传
+3. **跨页内容引用**：LLM 可参考前后页内容生成连续叙述
+4. **PDF 二次编辑**：单页重新生成（"重写第 3 页"），不必整本重来
+5. **OSS 上传**：草稿 → 发布后自动同步到 OSS，公共阅读端走 OSS CDN
+6. **PDF 模板中心**：用户选模板（"杂志风 / 简洁风 / 学术风"），影响 LLM 输出风格
+7. **失败 audit 改造（v6.1 遗留）**：v6.0 失败分支补 audit，让大屏 `failed` 不再恒为 0
+8. **限速持久化到 data.json**（v6.1 遗留）：进程重启不丢配额
+9. **滑动窗口限速**（v6.1 遗留）：sliding window 行为更平滑
+10. **多模型路由**（v6.0 遗留）：拆 `ai-client` 抽象层，支持 Claude / GPT-4 切换
+11. **跨租户 AI benchmark**（v6.1 遗留）：平台管理员视角看各租户 AI 用量
+
+---
+
 
 
