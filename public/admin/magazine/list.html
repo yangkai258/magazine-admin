@@ -9,6 +9,10 @@
   <script src="/admin/js/auth.js"></script>
   <script src="/admin/js/nav.js?v=3"></script>
   <script src="/admin/js/topbar.js?v=3"></script>
+  <style>
+    /* v6.0: ?highlight=<id> 高亮 4s 渐隐 */
+    tr.row-highlight td { background: #fef9c3 !important; transition: background 1.5s ease-out; }
+  </style>
 </head>
 <body>
   <script>MAG_AUTH.requireAuth();</script>
@@ -144,22 +148,88 @@
         return;
       }
       empty.style.display = 'none';
-      tbody.innerHTML = magazines.map(m => `
-        <tr>
-          <td>${m.id}</td>
-          <td><img src="${coverImg(m.cover_pc)}" class="table-img" onerror="this.src='data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%2760%27 height=%2740%27 fill=%27%23ddd%27><rect width=%2760%27 height=%2740%27/></svg>'"></td>
-          <td><a href="/admin/magazine/edit.html?id=${m.id}" style="color:var(--primary);text-decoration:none;font-weight:500">${m.name}</a></td>
-          <td>${formatDate(m.upload_date)}</td>
-          <td><span class="status-badge ${m.enabled ? 'status-enabled' : 'status-disabled'}">${m.enabled ? '启用' : '停用'}</span></td>
-          <td>
-            <a href="${location.protocol}//${location.hostname}:50100/reader/viewer.html?id=${m.id}&t=${window.__tenantSlug || 'zhuobao'}" target="_blank" class="btn btn-sm btn-primary" title="在阅读端新窗口打开">预览</a>
-            ${state.isOwner ? `
-            <a href="/admin/magazine/edit.html?id=${m.id}" class="btn btn-sm btn-secondary">编辑</a>
-            <button class="btn btn-sm btn-danger" onclick="deleteMagazine(${m.id})">删除</button>
-            ` : ''}
-          </td>
-        </tr>
-      `).join('');
+      // XSS 防御：name/description 字段从后端是动态的，这里走 textContent / DOM 构建
+      // —— 历史上 list.html 直接 innerHTML 拼（v5 假设 name 是 owner 自填的），
+      // 现在多了 AI 生成 / 多租户场景，v6.0 起统一用 createElement 防 XSS。
+      tbody.textContent = '';
+      magazines.forEach(function (m) {
+        var tr = document.createElement('tr');
+        tr.id = 'row-' + m.id;
+        tr.setAttribute('data-magazine-id', String(m.id));
+
+        var tdId = document.createElement('td');
+        tdId.textContent = String(m.id);
+        tr.appendChild(tdId);
+
+        var tdCover = document.createElement('td');
+        var img = document.createElement('img');
+        img.src = coverImg(m.cover_pc);
+        img.className = 'table-img';
+        img.alt = '';
+        img.onerror = function () { this.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40" fill="%23ddd"><rect width="60" height="40"/></svg>'; };
+        tdCover.appendChild(img);
+        tr.appendChild(tdCover);
+
+        var tdName = document.createElement('td');
+        var nameA = document.createElement('a');
+        nameA.href = '/admin/magazine/edit.html?id=' + encodeURIComponent(m.id);
+        nameA.style.color = 'var(--primary)';
+        nameA.style.textDecoration = 'none';
+        nameA.style.fontWeight = '500';
+        nameA.textContent = m.name || '(未命名)';
+        tdName.appendChild(nameA);
+        tr.appendChild(tdName);
+
+        var tdDate = document.createElement('td');
+        tdDate.textContent = formatDate(m.upload_date);
+        tr.appendChild(tdDate);
+
+        var tdStatus = document.createElement('td');
+        var statusSpan = document.createElement('span');
+        statusSpan.className = 'status-badge ' + (m.enabled ? 'status-enabled' : 'status-disabled');
+        statusSpan.textContent = m.enabled ? '启用' : '停用';
+        tdStatus.appendChild(statusSpan);
+        tr.appendChild(tdStatus);
+
+        var tdAct = document.createElement('td');
+        var previewA = document.createElement('a');
+        previewA.href = location.protocol + '//' + location.hostname + ':50100/reader/viewer.html?id=' + encodeURIComponent(m.id) + '&t=' + encodeURIComponent(window.__tenantSlug || 'zhuobao');
+        previewA.target = '_blank';
+        previewA.className = 'btn btn-sm btn-primary';
+        previewA.title = '在阅读端新窗口打开';
+        previewA.textContent = '预览';
+        tdAct.appendChild(previewA);
+        if (state.isOwner) {
+          var editA = document.createElement('a');
+          editA.href = '/admin/magazine/edit.html?id=' + encodeURIComponent(m.id);
+          editA.className = 'btn btn-sm btn-secondary';
+          editA.textContent = '编辑';
+          tdAct.appendChild(editA);
+          var delBtn = document.createElement('button');
+          delBtn.className = 'btn btn-sm btn-danger';
+          delBtn.textContent = '删除';
+          delBtn.addEventListener('click', (function (id) {
+            return function () { deleteMagazine(id); };
+          })(m.id));
+          tdAct.appendChild(delBtn);
+        }
+        tr.appendChild(tdAct);
+
+        tbody.appendChild(tr);
+      });
+
+      // v6.0：?highlight=<id> 高亮跳转到的那一行（从 ai-generate.html 跳过来用）
+      try {
+        var hl = parseInt(new URL(location.href).searchParams.get('highlight') || '', 10);
+        if (!isNaN(hl) && hl > 0) {
+          var row = document.getElementById('row-' + hl);
+          if (row) {
+            row.classList.add('row-highlight');
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(function () { row.classList.remove('row-highlight'); }, 4000);
+          }
+        }
+      } catch (_) { /* 忽略 */ }
     }
 
     async function deleteMagazine(id) {

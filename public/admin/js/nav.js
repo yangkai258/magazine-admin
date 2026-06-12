@@ -15,12 +15,13 @@
 (function () {
   'use strict';
 
-  // 单一权威 nav 列表 —— 任何页面都展示这 10 项，按角色隐藏
+  // 单一权威 nav 列表 —— 任何页面都展示这 N 项，按角色隐藏
   // icon 字段是 Lucide 图标名（https://lucide.dev），前端在 nav-icon span 上用 data-lucide
   var ITEMS = [
-    { key: 'dashboard',     icon: 'layout-dashboard', label: '总览',       href: '/admin/' },
-    { key: 'magazine',      icon: 'book-open',        label: '杂志管理',   href: '/admin/magazine/list.html' },
-    { key: 'cover',         icon: 'image',            label: '封面管理',   href: '/admin/cover/list.html' },
+    { key: 'dashboard',     icon: 'layout-dashboard', label: '总览',         href: '/admin/' },
+    { key: 'ai-generate',   icon: 'sparkles',         label: 'AI 一句话生成', href: '/admin/ai-generate.html', role: 'owner' },
+    { key: 'magazine',      icon: 'book-open',        label: '杂志管理',     href: '/admin/magazine/list.html' },
+    { key: 'cover',         icon: 'image',            label: '封面管理',     href: '/admin/cover/list.html' },
     { key: 'branding',      icon: 'palette',          label: '品牌定制',   href: '/admin/branding.html' },
     { key: 'analytics',     icon: 'bar-chart-3',      label: '阅读分析',   href: '/admin/analytics.html' },
     { key: 'billing',       icon: 'credit-card',      label: '订阅与计费', href: '/admin/billing.html',        role: 'owner' },

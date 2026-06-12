@@ -54,3 +54,7 @@ function coverImg(src) {
   if (!src) return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="50" fill="%23ddd"><rect width="80" height="50"/></svg>';
   return src;  // 同源，相对路径如 /uploads/xxx.png 浏览器自动拼当前 origin
 }
+
+// v6.0 AI 一句话生成画册骨架（owner-only）—— 详细字段见 server/admin.js 的 POST /api/admin/ai/skeleton
+api.aiSkeleton = ({ prompt, title, pageCount, locale }) =>
+  api.post('/admin/ai/skeleton', { prompt, title, pageCount, locale });

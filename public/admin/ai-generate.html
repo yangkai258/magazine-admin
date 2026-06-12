@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 一句话生成 · 杂志管理平台</title>
+  <link rel="stylesheet" href="/admin/css/style.css?v=3">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script src="/admin/js/nav.js?v=3"></script>
+  <script src="/admin/js/topbar.js?v=3"></script>
+  <style>
+    /* ====== AI 一句话生成 专用样式（不复用冲突的部分）====== */
+    .ai-hero {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 22px 26px;
+      margin-bottom: 20px;
+      box-shadow: 0 6px 20px rgba(124, 58, 237, 0.18);
+      position: relative;
+      overflow: hidden;
+    }
+    .ai-hero::before {
+      content: "";
+      position: absolute;
+      top: -40px; right: -40px;
+      width: 180px; height: 180px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 50%;
+    }
+    .ai-hero h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: relative; z-index: 1;
+    }
+    .ai-hero p {
+      font-size: 13px;
+      line-height: 1.7;
+      opacity: 0.95;
+      position: relative; z-index: 1;
+      max-width: 820px;
+    }
+    .ai-hero .hero-badges {
+      display: inline-flex;
+      gap: 6px;
+      margin-top: 10px;
+      position: relative; z-index: 1;
+    }
+    .ai-hero .hero-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    /* 表单卡片 */
+    .ai-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .ai-card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ai-card-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 18px;
+      line-height: 1.6;
+    }
+
+    /* 红条错误 */
+    .ai-error-bar {
+      display: none;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+    .ai-error-bar.show { display: block; }
+    .ai-error-bar .ai-error-close {
+      float: right;
+      background: none;
+      border: none;
+      color: #991b1b;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0 0 0 8px;
+    }
+
+    /* 字符计数 */
+    .char-count {
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-align: right;
+      margin-top: 2px;
+    }
+    .char-count.over { color: var(--danger); }
+
+    /* 骨架预览区 */
+    .ai-skeleton {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      margin-top: 8px;
+    }
+    .ai-skeleton-empty {
+      color: var(--text-secondary);
+      font-size: 13px;
+      text-align: center;
+      padding: 40px 0;
+    }
+    .ai-skeleton-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+      border-bottom: 1px dashed var(--border);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .ai-skeleton-meta strong { color: var(--text); font-weight: 600; }
+    .ai-skeleton-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .ai-skeleton-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 18px;
+      line-height: 1.7;
+    }
+    .ai-skeleton-pages {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .ai-skeleton-page {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      background: #fafafa;
+    }
+    .ai-skeleton-page-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .ai-skeleton-page-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .ai-skeleton-page-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      flex: 1;
+      min-width: 0;
+    }
+    .ai-skeleton-page-body {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .ai-skeleton-raw {
+      margin-top: 18px;
+      padding: 12px;
+      background: #1f2937;
+      color: #e5e7eb;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.6;
+      max-height: 320px;
+      overflow: auto;
+      white-space: pre;
+    }
+    .ai-skeleton-raw summary {
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      list-style: none;
+    }
+    .ai-skeleton-raw summary::-webkit-details-marker { display: none; }
+    .ai-skeleton-raw summary::before {
+      content: "▸ ";
+      display: inline-block;
+      transition: transform 0.15s;
+    }
+    .ai-skeleton-raw[open] summary::before { content: "▾ "; }
+
+    /* spinner */
+    .ai-spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: ai-spin 0.7s linear infinite;
+      margin-right: 4px;
+      vertical-align: -2px;
+    }
+    @keyframes ai-spin { to { transform: rotate(360deg); } }
+
+    /* 仅 owner 提示块（editor/viewer 进来时）*/
+    .ai-blocked {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      color: #9a3412;
+      padding: 16px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+  <script>MAG_AUTH.requireAuth();</script>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar">
+        <h1 class="page-title">AI 一句话生成</h1>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button>
+      </header>
+      <div class="content-area">
+        <!-- 顶部说明 -->
+        <div class="ai-hero">
+          <h2>✨ 一句话生成画册骨架</h2>
+          <p>
+            输入一段自然语言描述（5-2000 字），后端会调用 <code>MiniMax M3</code> 生成结构化画册骨架
+            （<strong>杂志名 / 简介 / N 页标题 + 正文</strong>），自动落库为一条 <code>enabled=0</code> 的草稿。
+            你可以在「杂志管理」页上传封面 + 图片后启用。
+          </p>
+          <div class="hero-badges">
+            <span class="hero-badge">仅 owner 可用</span>
+            <span class="hero-badge">v6.0</span>
+            <span class="hero-badge">text → skeleton</span>
+          </div>
+        </div>
+
+        <!-- 仅 owner 才能用的提示 -->
+        <div id="blockedArea" class="ai-blocked" style="display:none">
+          <b>权限不足。</b> AI 一句话生成仅 <b>owner</b> 角色可用。请联系你的租户 owner 升级权限，或换 owner 账号登录。
+        </div>
+
+        <!-- 主表单区 -->
+        <div id="mainArea">
+          <form id="aiForm" class="ai-card" novalidate>
+            <div class="ai-card-title">
+              <i data-lucide="wand-2" style="width:18px;height:18px;color:var(--primary)"></i>
+              生成参数
+            </div>
+            <div class="ai-card-hint">
+              <b>prompt</b> 描述画册主题 / 目标读者 / 内容方向，越具体生成的骨架越贴合；<b>title</b> 不填则由 LLM 自动起名。
+            </div>
+
+            <div id="errorBar" class="ai-error-bar" role="alert">
+              <button type="button" class="ai-error-close" aria-label="关闭">×</button>
+              <span id="errorBarText"></span>
+            </div>
+
+            <div class="form-group" style="margin-bottom:14px">
+              <label for="prompt">一句话描述 * <small style="color:#888;font-weight:400">（5-2000 字）</small></label>
+              <textarea id="prompt" name="prompt" required minlength="5" maxlength="2000"
+                placeholder="例如：发布 2026 Q2 公司季刊，主题「AI 驱动零售增长」，6 页"
+                style="min-height:120px"></textarea>
+              <div class="char-count" id="promptCount">0 / 2000</div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="title">标题覆盖 <small style="color:#888;font-weight:400">（可选）</small></label>
+                <input type="text" id="title" name="title" maxlength="80"
+                  placeholder="（可选）覆盖 LLM 自动生成的标题">
+              </div>
+              <div class="form-group">
+                <label for="pageCount">页数</label>
+                <input type="number" id="pageCount" name="pageCount" min="3" max="20" value="6">
+              </div>
+              <div class="form-group">
+                <label for="locale">语言</label>
+                <select id="locale" name="locale">
+                  <option value="zh-CN" selected>中文</option>
+                  <option value="en-US">English</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" id="submitBtn" class="btn btn-primary">
+                <i data-lucide="sparkles" style="width:14px;height:14px"></i>
+                <span id="submitBtnText">生成骨架</span>
+              </button>
+              <button type="button" id="applyBtn" class="btn btn-success" disabled
+                title="生成成功后可点击跳到杂志列表">
+                <i data-lucide="arrow-right" style="width:14px;height:14px"></i>
+                应用到杂志列表
+              </button>
+              <span style="margin-left:auto;font-size:12px;color:var(--text-secondary)">
+                调用 <code>POST /api/admin/ai/skeleton</code>
+              </span>
+            </div>
+          </form>
+
+          <!-- 骨架预览 -->
+          <div class="ai-skeleton" id="skeletonWrap">
+            <div class="ai-card-title" style="margin-bottom:14px">
+              <i data-lucide="file-text" style="width:18px;height:18px;color:var(--primary)"></i>
+              骨架预览
+            </div>
+            <div class="ai-skeleton-empty" id="skeletonEmpty">
+              还没有生成结果 —— 提交表单后这里会显示 LLM 生成的杂志骨架。
+            </div>
+            <div id="skeletonResult" style="display:none">
+              <div class="ai-skeleton-meta" id="skeletonMeta"></div>
+              <div class="ai-skeleton-title" id="skName"></div>
+              <div class="ai-skeleton-desc" id="skDesc"></div>
+              <ul class="ai-skeleton-pages" id="skPages"></ul>
+              <details class="ai-skeleton-raw" id="skRawWrap">
+                <summary>查看原始 JSON</summary>
+                <pre id="skRaw" style="margin:0;font-family:ui-monospace,Consolas,monospace"></pre>
+              </details>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/admin/js/api.js"></script>
+  <script>
+    // ============================================================
+    // 渲染侧边栏 nav（复用 nav.js）
+    // ============================================================
+    let __ctx = null;
+    let __isOwner = false;
+    let __lastMagazineId = null;
+
+    MAG_NAV.render('ai-generate').then(function (ctx) {
+      __ctx = ctx;
+      var u = ctx && ctx.user;
+      __isOwner = !!(u && u.role === 'owner');
+      if (!__isOwner) {
+        // editor / viewer / platform-admin 之外的 viewer 都看不到主表单
+        document.getElementById('mainArea').style.display = 'none';
+        document.getElementById('blockedArea').style.display = '';
+      } else {
+        // owner 进来：再调一次 /me 拿最新 user 角色（不依赖 nav.js 缓存）
+        refreshOwnerFlag();
+      }
+    });
+
+    function refreshOwnerFlag() {
+      MAG_AUTH.getUser().then(function (u) {
+        if (u && u.role === 'owner') {
+          __isOwner = true;
+          document.getElementById('mainArea').style.display = '';
+          document.getElementById('blockedArea').style.display = 'none';
+        } else {
+          __isOwner = false;
+          document.getElementById('mainArea').style.display = 'none';
+          document.getElementById('blockedArea').style.display = '';
+        }
+      });
+    }
+
+    // ============================================================
+    // 字符计数
+    // ============================================================
+    var promptEl = document.getElementById('prompt');
+    var promptCountEl = document.getElementById('promptCount');
+    function updatePromptCount() {
+      var n = promptEl.value.length;
+      promptCountEl.textContent = n + ' / 2000';
+      promptCountEl.classList.toggle('over', n > 2000);
+    }
+    promptEl.addEventListener('input', updatePromptCount);
+    updatePromptCount();
+
+    // ============================================================
+    // 错误条
+    // ============================================================
+    var errorBar = document.getElementById('errorBar');
+    var errorBarText = document.getElementById('errorBarText');
+    document.querySelector('.ai-error-close').addEventListener('click', function () {
+      errorBar.classList.remove('show');
+    });
+    function showError(msg) {
+      errorBarText.textContent = msg;
+      errorBar.classList.add('show');
+      // 把视野滚到错误条
+      errorBar.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // ============================================================
+    // 提交
+    // ============================================================
+    var submitBtn = document.getElementById('submitBtn');
+    var submitBtnText = document.getElementById('submitBtnText');
+    var applyBtn = document.getElementById('applyBtn');
+    var skeletonResult = document.getElementById('skeletonResult');
+    var skeletonEmpty = document.getElementById('skeletonEmpty');
+
+    document.getElementById('aiForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (!__isOwner) {
+        showError('仅 owner 角色可使用此功能');
+        toast('仅 owner 可用', 'error');
+        return;
+      }
+      var prompt = promptEl.value.trim();
+      if (prompt.length < 5) {
+        showError('prompt 至少 5 个字');
+        promptEl.focus();
+        return;
+      }
+      if (prompt.length > 2000) {
+        showError('prompt 不能超过 2000 字');
+        promptEl.focus();
+        return;
+      }
+      var pageCount = parseInt(document.getElementById('pageCount').value, 10);
+      if (!(pageCount >= 3 && pageCount <= 20)) {
+        showError('页数必须在 3-20 之间');
+        return;
+      }
+      var title = document.getElementById('title').value.trim();
+      var locale = document.getElementById('locale').value;
+
+      // 进入加载态
+      errorBar.classList.remove('show');
+      submitBtn.disabled = true;
+      applyBtn.disabled = true;
+      submitBtnText.innerHTML = '<span class="ai-spinner"></span>生成中…';
+      skeletonResult.style.display = 'none';
+      skeletonEmpty.style.display = '';
+      skeletonEmpty.textContent = '正在生成骨架（通常 5-30 秒）…';
+
+      try {
+        // api.aiSkeleton 在 api.js 末尾：api.post('/admin/ai/skeleton', {...})
+        var resp = await api.aiSkeleton({ prompt: prompt, title: title, pageCount: pageCount, locale: locale });
+        renderSkeleton(resp);
+        var mid = resp && resp.magazine && resp.magazine.id;
+        __lastMagazineId = mid != null ? mid : null;
+        if (__lastMagazineId != null) {
+          applyBtn.disabled = false;
+          applyBtn.title = '跳到 /admin/magazine/list.html?highlight=' + __lastMagazineId;
+        }
+        toast('生成成功 · 共 ' + ((resp.pages || []).length) + ' 页', 'success');
+      } catch (err) {
+        // 区分错误码：401 → 跳登录；403 → 仅 owner；其它 → 显示后端 err.message
+        var msg = (err && err.message) ? String(err.message) : '生成失败';
+        if (/401|未登录|unauthor/i.test(msg) || msg.indexOf('401') === 0) {
+          toast('登录已失效，正在跳转登录页…', 'error');
+          // 用 auth.js 自己的 redirect（保留 referrer）
+          if (window.MAG_AUTH && typeof window.MAG_AUTH.logout === 'function') {
+            // logout 会清服务端 session；这里只想要跳登录，保留 cookie 让 401 信息在登录页显示
+            // 最简方案：直接 location.href
+            try { document.referrer && (localStorage.mag_admin_redirect = document.referrer); } catch (_) {}
+          }
+          setTimeout(function () { location.href = '/admin/login.html'; }, 600);
+          return;
+        }
+        if (/403|仅 owner|forbid/i.test(msg) || msg.indexOf('403') === 0) {
+          showError('仅 owner 可用 · 后端返回：' + msg);
+          toast('仅 owner 可用', 'error');
+          return;
+        }
+        showError(msg);
+        toast(msg, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtnText.textContent = '生成骨架';
+        // 重新跑 lucide（按钮里 svg 在 disabled 切换时可能没刷新）
+        if (window.lucide && window.lucide.createIcons) {
+          try { window.lucide.createIcons({ nameAttr: 'data-lucide' }); } catch (_) {}
+        }
+      }
+    });
+
+    // ============================================================
+    // 渲染骨架（XSS 安全：全部用 textContent / createElement，不拼 innerHTML）
+    // ============================================================
+    function renderSkeleton(resp) {
+      if (!resp || !resp.magazine) {
+        skeletonEmpty.style.display = '';
+        skeletonEmpty.textContent = '生成完成但响应异常，请重试。';
+        skeletonResult.style.display = 'none';
+        return;
+      }
+      var mag = resp.magazine;
+      var pages = Array.isArray(resp.pages) ? resp.pages : [];
+      var meta = resp.llm_meta || {};
+
+      skeletonEmpty.style.display = 'none';
+      skeletonResult.style.display = '';
+
+      // meta 行：magazine_id / model / duration / retries
+      var metaEl = document.getElementById('skeletonMeta');
+      metaEl.textContent = '';
+      var items = [
+        { k: 'magazine_id', v: mag.id },
+        { k: 'enabled',     v: mag.enabled ? 'true（注意：v6.0 默认 enabled=0）' : 'false' },
+        { k: 'model',       v: meta.model || '-' },
+        { k: 'duration',    v: meta.duration_ms != null ? (meta.duration_ms + ' ms') : '-' },
+        { k: 'retries',     v: meta.retries != null ? meta.retries : 0 }
+      ];
+      items.forEach(function (it) {
+        var wrap = document.createElement('span');
+        var k = document.createElement('span');
+        k.style.color = 'var(--text-secondary)';
+        k.textContent = it.k + ': ';
+        var v = document.createElement('strong');
+        v.textContent = String(it.v);
+        wrap.appendChild(k);
+        wrap.appendChild(v);
+        metaEl.appendChild(wrap);
+      });
+
+      // title / desc（XSS：textContent）
+      document.getElementById('skName').textContent = mag.name || '(未命名)';
+      document.getElementById('skDesc').textContent = mag.description || '';
+
+      // pages 列表
+      var ul = document.getElementById('skPages');
+      ul.textContent = '';
+      if (pages.length === 0) {
+        var li = document.createElement('li');
+        li.className = 'ai-skeleton-page';
+        li.textContent = '（LLM 未返回任何页）';
+        ul.appendChild(li);
+      } else {
+        pages.forEach(function (p, i) {
+          var li = document.createElement('li');
+          li.className = 'ai-skeleton-page';
+          var head = document.createElement('div');
+          head.className = 'ai-skeleton-page-head';
+          var num = document.createElement('span');
+          num.className = 'ai-skeleton-page-num';
+          num.textContent = String(p.page_order != null ? p.page_order : (i + 1));
+          var titleEl = document.createElement('span');
+          titleEl.className = 'ai-skeleton-page-title';
+          // XSS 防御：title / body 一律 textContent；不要 innerHTML
+          titleEl.textContent = p.title || '(无标题)';
+          head.appendChild(num);
+          head.appendChild(titleEl);
+          var body = document.createElement('div');
+          body.className = 'ai-skeleton-page-body';
+          body.textContent = p.body || '';
+          li.appendChild(head);
+          li.appendChild(body);
+          ul.appendChild(li);
+        });
+      }
+
+      // 原始 JSON
+      try {
+        document.getElementById('skRaw').textContent = JSON.stringify(resp, null, 2);
+      } catch (e) {
+        document.getElementById('skRaw').textContent = String(resp);
+      }
+    }
+
+    // ============================================================
+    // 「应用到杂志列表」→ 跳到 /admin/magazine/list.html?highlight=<id>
+    // ============================================================
+    applyBtn.addEventListener('click', function () {
+      if (__lastMagazineId == null) {
+        toast('还没有生成的杂志', 'error');
+        return;
+      }
+      location.href = '/admin/magazine/list.html?highlight=' + encodeURIComponent(__lastMagazineId);
+    });
+
+    // ============================================================
+    // Lucide 图标补渲染（页面里的 icon）
+    // ============================================================
+    if (window.lucide && window.lucide.createIcons) {
+      try { window.lucide.createIcons({ nameAttr: 'data-lucide' }); } catch (_) {}
+    }
+  </script>
+</body>
+</html>
