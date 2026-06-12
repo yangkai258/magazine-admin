@@ -106,6 +106,17 @@
       "cover_mobile": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/pages_v2/page-01.png",
       "enabled": 1,
       "created_at": "2026-03-01T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "tenant_id": 1,
+      "name": "【AI 草稿示例】2026 Q2 季刊",
+      "upload_date": "2026-06-12",
+      "description": "由 v6.0 AI 一句话生成端点（POST /api/admin/ai/skeleton）mock 出来的骨架草稿，演示 is_skeleton:true 生命周期。v6.0 e2e 期间 producer 自报跑通但 sandbox 限制未 commit 进 repo；v6.1 任务里用 init.js 的官方 API 补回 live data，给 ai-audit-dashboard 端点 demo 用。",
+      "cover_pc": "",
+      "cover_mobile": "",
+      "enabled": 0,
+      "created_at": "2026-06-12T06:01:20.096Z"
     }
   ],
   "pages": [
@@ -115,7 +126,10 @@
       "magazine_id": 1,
       "page_order": 2,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913793538-115033529.png",
-      "created_at": "2026-06-08T10:16:41.677Z"
+      "created_at": "2026-06-08T10:16:41.677Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 3,
@@ -123,7 +137,10 @@
       "magazine_id": 1,
       "page_order": 3,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913793665-249241062.png",
-      "created_at": "2026-06-08T10:16:41.677Z"
+      "created_at": "2026-06-08T10:16:41.677Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 4,
@@ -131,7 +148,10 @@
       "magazine_id": 1,
       "page_order": 4,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913793671-587953413.png",
-      "created_at": "2026-06-08T10:16:41.677Z"
+      "created_at": "2026-06-08T10:16:41.677Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 5,
@@ -139,7 +159,10 @@
       "magazine_id": 1,
       "page_order": 5,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913793678-274335377.png",
-      "created_at": "2026-06-08T10:16:41.677Z"
+      "created_at": "2026-06-08T10:16:41.677Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 6,
@@ -147,7 +170,10 @@
       "magazine_id": 1,
       "page_order": 6,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913793686-943340436.png",
-      "created_at": "2026-06-08T10:16:41.677Z"
+      "created_at": "2026-06-08T10:16:41.677Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 7,
@@ -155,7 +181,10 @@
       "magazine_id": 1,
       "page_order": 7,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913793734-153895088.png",
-      "created_at": "2026-06-08T10:16:41.677Z"
+      "created_at": "2026-06-08T10:16:41.677Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 8,
@@ -163,7 +192,10 @@
       "magazine_id": 1,
       "page_order": 8,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913793739-409945219.png",
-      "created_at": "2026-06-08T10:16:41.677Z"
+      "created_at": "2026-06-08T10:16:41.677Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 9,
@@ -171,7 +203,10 @@
       "magazine_id": 1,
       "page_order": 9,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913793746-676373349.png",
-      "created_at": "2026-06-08T10:16:41.677Z"
+      "created_at": "2026-06-08T10:16:41.677Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 10,
@@ -179,7 +214,10 @@
       "magazine_id": 1,
       "page_order": 10,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913793763-732734739.png",
-      "created_at": "2026-06-08T10:16:41.678Z"
+      "created_at": "2026-06-08T10:16:41.678Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 11,
@@ -187,7 +225,10 @@
       "magazine_id": 1,
       "page_order": 11,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913793787-612806981.png",
-      "created_at": "2026-06-08T10:16:41.678Z"
+      "created_at": "2026-06-08T10:16:41.678Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 12,
@@ -195,7 +236,10 @@
       "magazine_id": 1,
       "page_order": 12,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913793834-903710455.png",
-      "created_at": "2026-06-08T10:16:41.678Z"
+      "created_at": "2026-06-08T10:16:41.678Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 13,
@@ -203,7 +247,10 @@
       "magazine_id": 1,
       "page_order": 13,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913820669-741919371.png",
-      "created_at": "2026-06-08T10:17:08.483Z"
+      "created_at": "2026-06-08T10:17:08.483Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 14,
@@ -211,7 +258,10 @@
       "magazine_id": 1,
       "page_order": 14,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913820682-713707080.png",
-      "created_at": "2026-06-08T10:17:08.483Z"
+      "created_at": "2026-06-08T10:17:08.483Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 15,
@@ -219,7 +269,10 @@
       "magazine_id": 1,
       "page_order": 15,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913820708-298558626.png",
-      "created_at": "2026-06-08T10:17:08.483Z"
+      "created_at": "2026-06-08T10:17:08.483Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 16,
@@ -227,7 +280,10 @@
       "magazine_id": 1,
       "page_order": 16,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913820740-434498141.png",
-      "created_at": "2026-06-08T10:17:08.483Z"
+      "created_at": "2026-06-08T10:17:08.483Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 17,
@@ -235,7 +291,10 @@
       "magazine_id": 1,
       "page_order": 17,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913820777-796031941.png",
-      "created_at": "2026-06-08T10:17:08.483Z"
+      "created_at": "2026-06-08T10:17:08.483Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 18,
@@ -243,7 +302,10 @@
       "magazine_id": 1,
       "page_order": 18,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913820794-350757717.png",
-      "created_at": "2026-06-08T10:17:08.483Z"
+      "created_at": "2026-06-08T10:17:08.483Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 19,
@@ -251,7 +313,10 @@
       "magazine_id": 1,
       "page_order": 19,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913820853-783447546.png",
-      "created_at": "2026-06-08T10:17:08.483Z"
+      "created_at": "2026-06-08T10:17:08.483Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 20,
@@ -259,7 +324,10 @@
       "magazine_id": 1,
       "page_order": 20,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913820879-303896172.png",
-      "created_at": "2026-06-08T10:17:08.483Z"
+      "created_at": "2026-06-08T10:17:08.483Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 21,
@@ -267,7 +335,10 @@
       "magazine_id": 1,
       "page_order": 21,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913820928-747937230.png",
-      "created_at": "2026-06-08T10:17:08.483Z"
+      "created_at": "2026-06-08T10:17:08.483Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 22,
@@ -275,7 +346,10 @@
       "magazine_id": 1,
       "page_order": 22,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913820941-376589128.png",
-      "created_at": "2026-06-08T10:17:08.483Z"
+      "created_at": "2026-06-08T10:17:08.483Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 23,
@@ -283,7 +357,10 @@
       "magazine_id": 1,
       "page_order": 23,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913845560-958274146.png",
-      "created_at": "2026-06-08T10:17:28.857Z"
+      "created_at": "2026-06-08T10:17:28.857Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 24,
@@ -291,7 +368,10 @@
       "magazine_id": 1,
       "page_order": 24,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913845571-626319910.png",
-      "created_at": "2026-06-08T10:17:28.857Z"
+      "created_at": "2026-06-08T10:17:28.857Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 25,
@@ -299,7 +379,10 @@
       "magazine_id": 1,
       "page_order": 25,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913845590-227376870.png",
-      "created_at": "2026-06-08T10:17:28.857Z"
+      "created_at": "2026-06-08T10:17:28.857Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 26,
@@ -307,7 +390,10 @@
       "magazine_id": 1,
       "page_order": 26,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913845596-208274923.png",
-      "created_at": "2026-06-08T10:17:28.857Z"
+      "created_at": "2026-06-08T10:17:28.857Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 27,
@@ -315,7 +401,10 @@
       "magazine_id": 1,
       "page_order": 27,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913845608-676173524.png",
-      "created_at": "2026-06-08T10:17:28.857Z"
+      "created_at": "2026-06-08T10:17:28.857Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 28,
@@ -323,7 +412,10 @@
       "magazine_id": 1,
       "page_order": 28,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913845622-676913525.png",
-      "created_at": "2026-06-08T10:17:28.857Z"
+      "created_at": "2026-06-08T10:17:28.857Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 29,
@@ -331,7 +423,10 @@
       "magazine_id": 1,
       "page_order": 29,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913845630-872546061.png",
-      "created_at": "2026-06-08T10:17:28.857Z"
+      "created_at": "2026-06-08T10:17:28.857Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 30,
@@ -339,7 +434,10 @@
       "magazine_id": 1,
       "page_order": 30,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913845654-503370279.png",
-      "created_at": "2026-06-08T10:17:28.857Z"
+      "created_at": "2026-06-08T10:17:28.857Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 31,
@@ -347,7 +445,10 @@
       "magazine_id": 1,
       "page_order": 31,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913845665-975658137.png",
-      "created_at": "2026-06-08T10:17:28.857Z"
+      "created_at": "2026-06-08T10:17:28.857Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 32,
@@ -355,7 +456,10 @@
       "magazine_id": 1,
       "page_order": 32,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913845677-333870908.png",
-      "created_at": "2026-06-08T10:17:28.857Z"
+      "created_at": "2026-06-08T10:17:28.857Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 33,
@@ -363,7 +467,10 @@
       "magazine_id": 1,
       "page_order": 33,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913862934-726369272.png",
-      "created_at": "2026-06-08T10:17:45.637Z"
+      "created_at": "2026-06-08T10:17:45.637Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 34,
@@ -371,7 +478,10 @@
       "magazine_id": 1,
       "page_order": 34,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913862944-150943731.png",
-      "created_at": "2026-06-08T10:17:45.637Z"
+      "created_at": "2026-06-08T10:17:45.637Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 35,
@@ -379,7 +489,10 @@
       "magazine_id": 1,
       "page_order": 35,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913862952-543159614.png",
-      "created_at": "2026-06-08T10:17:45.637Z"
+      "created_at": "2026-06-08T10:17:45.637Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 36,
@@ -387,7 +500,10 @@
       "magazine_id": 1,
       "page_order": 36,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913862956-738807805.png",
-      "created_at": "2026-06-08T10:17:45.637Z"
+      "created_at": "2026-06-08T10:17:45.637Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 37,
@@ -395,7 +511,10 @@
       "magazine_id": 1,
       "page_order": 37,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913862958-123463292.png",
-      "created_at": "2026-06-08T10:17:45.638Z"
+      "created_at": "2026-06-08T10:17:45.638Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 38,
@@ -403,7 +522,10 @@
       "magazine_id": 1,
       "page_order": 38,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913862963-739269391.png",
-      "created_at": "2026-06-08T10:17:45.638Z"
+      "created_at": "2026-06-08T10:17:45.638Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 39,
@@ -411,7 +533,10 @@
       "magazine_id": 1,
       "page_order": 39,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913862983-909019505.png",
-      "created_at": "2026-06-08T10:17:45.638Z"
+      "created_at": "2026-06-08T10:17:45.638Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 40,
@@ -419,7 +544,10 @@
       "magazine_id": 1,
       "page_order": 40,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913862990-287693037.png",
-      "created_at": "2026-06-08T10:17:45.638Z"
+      "created_at": "2026-06-08T10:17:45.638Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 41,
@@ -427,7 +555,10 @@
       "magazine_id": 1,
       "page_order": 41,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913862997-714567434.png",
-      "created_at": "2026-06-08T10:17:45.638Z"
+      "created_at": "2026-06-08T10:17:45.638Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 42,
@@ -435,7 +566,10 @@
       "magazine_id": 1,
       "page_order": 42,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913863004-711557184.png",
-      "created_at": "2026-06-08T10:17:45.638Z"
+      "created_at": "2026-06-08T10:17:45.638Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 43,
@@ -443,7 +577,10 @@
       "magazine_id": 1,
       "page_order": 43,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889202-482889471.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 44,
@@ -451,7 +588,10 @@
       "magazine_id": 1,
       "page_order": 44,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889213-380870422.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 45,
@@ -459,7 +599,10 @@
       "magazine_id": 1,
       "page_order": 45,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889219-108254553.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 46,
@@ -467,7 +610,10 @@
       "magazine_id": 1,
       "page_order": 46,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889235-14590320.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 47,
@@ -475,7 +621,10 @@
       "magazine_id": 1,
       "page_order": 47,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889240-835757351.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 48,
@@ -483,7 +632,10 @@
       "magazine_id": 1,
       "page_order": 48,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889251-167607067.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 49,
@@ -491,7 +643,10 @@
       "magazine_id": 1,
       "page_order": 49,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889264-16751049.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 50,
@@ -499,7 +654,10 @@
       "magazine_id": 1,
       "page_order": 50,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889295-190274610.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 51,
@@ -507,7 +665,10 @@
       "magazine_id": 1,
       "page_order": 51,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889299-154371032.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 52,
@@ -515,7 +676,10 @@
       "magazine_id": 1,
       "page_order": 52,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889326-100492603.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 53,
@@ -523,7 +687,10 @@
       "magazine_id": 1,
       "page_order": 53,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889330-913252693.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 54,
@@ -531,7 +698,10 @@
       "magazine_id": 1,
       "page_order": 54,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889335-351038535.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 55,
@@ -539,7 +709,10 @@
       "magazine_id": 1,
       "page_order": 55,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889352-295612572.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 56,
@@ -547,7 +720,10 @@
       "magazine_id": 1,
       "page_order": 56,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889364-773535351.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 57,
@@ -555,7 +731,10 @@
       "magazine_id": 1,
       "page_order": 57,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889372-652581831.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 58,
@@ -563,7 +742,10 @@
       "magazine_id": 1,
       "page_order": 58,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889393-96013603.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 59,
@@ -571,7 +753,10 @@
       "magazine_id": 1,
       "page_order": 59,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889413-577741644.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 60,
@@ -579,7 +764,10 @@
       "magazine_id": 1,
       "page_order": 60,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889426-587597503.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 61,
@@ -587,7 +775,10 @@
       "magazine_id": 1,
       "page_order": 61,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889455-698201861.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 62,
@@ -595,7 +786,10 @@
       "magazine_id": 1,
       "page_order": 62,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889470-427938972.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 63,
@@ -603,7 +797,10 @@
       "magazine_id": 1,
       "page_order": 63,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889479-678912574.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 64,
@@ -611,7 +808,10 @@
       "magazine_id": 1,
       "page_order": 64,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889508-599922580.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 65,
@@ -619,7 +819,10 @@
       "magazine_id": 1,
       "page_order": 65,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889523-779617304.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 66,
@@ -627,7 +830,10 @@
       "magazine_id": 1,
       "page_order": 66,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889532-733790809.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 67,
@@ -635,7 +841,10 @@
       "magazine_id": 1,
       "page_order": 67,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889541-368378865.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 68,
@@ -643,7 +852,10 @@
       "magazine_id": 1,
       "page_order": 68,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889550-77462907.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 69,
@@ -651,7 +863,10 @@
       "magazine_id": 1,
       "page_order": 69,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889561-385882757.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 70,
@@ -659,7 +874,10 @@
       "magazine_id": 1,
       "page_order": 70,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889571-355551620.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 71,
@@ -667,7 +885,10 @@
       "magazine_id": 1,
       "page_order": 71,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889588-57090070.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 72,
@@ -675,7 +896,10 @@
       "magazine_id": 1,
       "page_order": 72,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889598-242888024.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 73,
@@ -683,7 +907,10 @@
       "magazine_id": 1,
       "page_order": 73,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889609-318689988.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 74,
@@ -691,7 +918,10 @@
       "magazine_id": 1,
       "page_order": 74,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889622-523071398.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 75,
@@ -699,7 +929,10 @@
       "magazine_id": 1,
       "page_order": 75,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889636-442441540.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 76,
@@ -707,7 +940,10 @@
       "magazine_id": 1,
       "page_order": 76,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889650-771041893.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 77,
@@ -715,7 +951,10 @@
       "magazine_id": 1,
       "page_order": 77,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889663-324304331.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 78,
@@ -723,7 +962,10 @@
       "magazine_id": 1,
       "page_order": 78,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889668-96812911.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 79,
@@ -731,7 +973,10 @@
       "magazine_id": 1,
       "page_order": 79,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889679-749171132.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 80,
@@ -739,7 +984,10 @@
       "magazine_id": 1,
       "page_order": 80,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913889685-196955035.png",
-      "created_at": "2026-06-08T10:18:33.469Z"
+      "created_at": "2026-06-08T10:18:33.469Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
     },
     {
       "id": 81,
@@ -747,7 +995,76 @@
       "magazine_id": 1,
       "page_order": 81,
       "image_path": "https://openclawbsf.oss-cn-beijing.aliyuncs.com/magazine-admin/covers/1780913940555-410868990.png",
-      "created_at": "2026-06-08T10:19:01.153Z"
+      "created_at": "2026-06-08T10:19:01.153Z",
+      "title": "",
+      "body": "",
+      "is_skeleton": false
+    },
+    {
+      "id": 82,
+      "tenant_id": 1,
+      "magazine_id": 2,
+      "page_order": 1,
+      "image_path": "",
+      "title": "封面｜2026 Q2 季刊",
+      "body": "封面页：logo + 季刊标题 + 季节主图。AI 占位，编辑后上传实际图片。",
+      "is_skeleton": true,
+      "created_at": "2026-06-12T06:01:20.098Z"
+    },
+    {
+      "id": 83,
+      "tenant_id": 1,
+      "magazine_id": 2,
+      "page_order": 2,
+      "image_path": "",
+      "title": "卷首语",
+      "body": "总裁致辞：Q2 业务回顾、Q3 战略重点。AI 占位。",
+      "is_skeleton": true,
+      "created_at": "2026-06-12T06:01:20.098Z"
+    },
+    {
+      "id": 84,
+      "tenant_id": 1,
+      "magazine_id": 2,
+      "page_order": 3,
+      "image_path": "",
+      "title": "产品故事 1｜新品发布",
+      "body": "产品名 + 核心卖点 + 上市时间。AI 占位。",
+      "is_skeleton": true,
+      "created_at": "2026-06-12T06:01:20.098Z"
+    },
+    {
+      "id": 85,
+      "tenant_id": 1,
+      "magazine_id": 2,
+      "page_order": 4,
+      "image_path": "",
+      "title": "渠道动态",
+      "body": "全国渠道商分布图 + 优秀案例 3 则。AI 占位。",
+      "is_skeleton": true,
+      "created_at": "2026-06-12T06:01:20.098Z"
+    },
+    {
+      "id": 86,
+      "tenant_id": 1,
+      "magazine_id": 2,
+      "page_order": 5,
+      "image_path": "",
+      "title": "客户案例｜卓宝 x 万科",
+      "body": "合作背景 + 解决方案 + 客户证言。AI 占位。",
+      "is_skeleton": true,
+      "created_at": "2026-06-12T06:01:20.098Z"
+    },
+    {
+      "id": 87,
+      "tenant_id": 1,
+      "magazine_id": 2,
+      "page_order": 6,
+      "image_path": "",
+      "title": "封底｜联系方式",
+      "body": "官方网址 + 客服电话 + 二维码。AI 占位。",
+      "is_skeleton": true,
+      "created_at": "2026-06-12T06:01:20.099Z"
     }
   ],
   "covers": [
@@ -1093,15 +1410,55 @@
       "details": null,
       "ip": "14.127.206.102",
       "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    {
+      "id": 19,
+      "timestamp": "2026-06-12T06:01:20.100Z",
+      "actor_user_id": 1,
+      "actor_user_email": "admin@zhuobao.local",
+      "actor_tenant_id": 1,
+      "actor_tenant_slug": "zhuobao",
+      "actor_is_platform_admin": false,
+      "actor_role": "owner",
+      "tenant_id": 1,
+      "action": "ai_generate_skeleton",
+      "target_type": "magazine",
+      "target_id": 2,
+      "details": {
+        "prompt": "卓宝 2026 Q2 季刊，覆盖卷首语 + 3 个产品故事 + 渠道 + 客户案例 + 封底",
+        "page_count": 6,
+        "prompt_chars": 39,
+        "model": "MiniMax-M3",
+        "retries": 0,
+        "mock": true,
+        "duration_ms": 1240,
+        "rate_remaining": 19
+      },
+      "ip": "127.0.0.1",
+      "user_agent": "seed-v6-evidence/1.0 (v6.1 任务回填)"
     }
   ],
-  "reader_analytics": [],
+  "reader_analytics": [
+    {
+      "id": 1,
+      "tenant_id": 1,
+      "magazine_id": 2,
+      "page_id": 82,
+      "viewer_id": "admin-preview",
+      "event_type": "view",
+      "page_number": 1,
+      "duration_ms": null,
+      "referrer": "admin://ai-stats",
+      "user_agent": "seed-v6-evidence/1.0",
+      "ts": "2026-06-12T06:01:20.101Z"
+    }
+  ],
   "signup_tokens": [],
   "password_reset_tokens": [],
   "email_log": [],
   "user_invitations": [],
   "_meta": {
-    "schema_version": 5,
-    "migrated_at": "2026-06-08T10:00:00.000Z"
+    "schema_version": 6,
+    "migrated_at": "2026-06-12T06:01:13.616Z"
   }
 }
