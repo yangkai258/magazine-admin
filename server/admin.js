@@ -11,6 +11,7 @@ const db = require('./db/init');
 const auth = require('./auth');
 const smtp = require('./smtp');
 const payment = require('./payment');
+const aiClient = require('./ai-client');
 
 const app = express();
 app.set('trust proxy', true);
@@ -437,6 +438,105 @@ app.post('/api/admin/tenant/reader-secret/regenerate', auth.requireRole('owner')
     link: buildReaderLink(req, updated),
     created_at: updated.reader_secret_created_at,
     updated_at: updated.reader_secret_updated_at
+  });
+});
+
+// ========== v6.0 AI 一句话生成画册骨架 ==========
+// POST /api/admin/ai/skeleton
+//   auth: owner
+//   body: { prompt: string (1-2000), title?: string (≤80), pageCount?: number 3..20 (default 6), locale?: 'zh-CN' (default) }
+//   行为：调 MiniMax M3 → 返回 name/description/pages → 落库为 enabled=0 草稿杂志 + pageCount 个 is_skeleton page
+//   失败：400 校验错 / 401 未登录 / 403 角色错 / 500 LLM/落库 失败（不暴露 LLM 原始报错）
+app.post('/api/admin/ai/skeleton', auth.requireRole('owner'), async (req, res) => {
+  const body = req.body || {};
+  const prompt = (body.prompt || '').toString().trim();
+  const title = (body.title || '').toString().trim();
+  const locale = body.locale === 'en-US' ? 'en-US' : 'zh-CN';
+
+  // prompt 校验
+  if (!prompt) return res.status(400).json({ error: 'prompt 不能为空' });
+  if (prompt.length > 2000) return res.status(400).json({ error: 'prompt 超过 2000 字' });
+  if (title.length > 80) return res.status(400).json({ error: 'title 不能超过 80 字' });
+
+  // pageCount 校验
+  let pageCount = 6;
+  if (body.pageCount !== undefined && body.pageCount !== null && body.pageCount !== '') {
+    pageCount = Number(body.pageCount);
+    if (!Number.isFinite(pageCount) || !Number.isInteger(pageCount)) {
+      return res.status(400).json({ error: 'pageCount 必须是整数' });
+    }
+    if (pageCount < 3 || pageCount > 20) {
+      return res.status(400).json({ error: 'pageCount 必须在 3..20 之间' });
+    }
+  }
+
+  // 调 LLM
+  let skeleton;
+  try {
+    skeleton = await aiClient.generateMagazineSkeleton({ title, prompt, pageCount, locale });
+  } catch (e) {
+    // env 缺失的特判：给前端一个清晰的、可执行的错误
+    if (!process.env.MINIMAX_API_KEY && process.env.MOCK_AI !== '1') {
+      console.error('[ai-skeleton] MINIMAX_API_KEY not configured');
+      return res.status(500).json({ error: 'MINIMAX_API_KEY not configured' });
+    }
+    console.error('[ai-skeleton] LLM call failed:', e && e.stack ? e.stack : e);
+    return res.status(500).json({ error: 'AI 生成失败: ' + (e && e.message ? e.message : '未知错误') });
+  }
+
+  // 落库：先 createMagazine（enabled=0 草稿），再 addPages（is_skeleton=true）
+  // 若 addPages 失败，回滚 deleteMagazine，避免孤立空壳
+  const today = new Date().toISOString().slice(0, 10);
+  const magazine = db.createMagazine(req.tenant.id, {
+    name: skeleton.name,
+    upload_date: today,
+    description: skeleton.description,
+    cover_pc: '',
+    cover_mobile: '',
+    enabled: 0
+  });
+
+  let pages;
+  try {
+    pages = db.addPages(req.tenant.id, magazine.id, skeleton.pages.map(p => ({
+      image_path: '',          // v6.0 占位：等用户后续上传图
+      title: p.title,
+      body: p.body,
+      is_skeleton: true
+    })));
+  } catch (e) {
+    // 回滚：删掉空壳 magazine
+    console.error('[ai-skeleton] addPages failed, rolling back magazine', magazine.id, e && e.stack ? e.stack : e);
+    try { db.deleteMagazine(magazine.id, { tenantId: req.tenant.id }); }
+    catch (e2) { console.error('[ai-skeleton] rollback deleteMagazine failed:', e2 && e2.message); }
+    return res.status(500).json({ error: '落库失败，已回滚: ' + (e && e.message ? e.message : '未知错误') });
+  }
+
+  auth.audit(req, 'ai_generate_skeleton', {
+    tenant_id: req.tenant.id,
+    target_type: 'magazine',
+    target_id: magazine.id,
+    details: {
+      page_count: pages.length,
+      prompt_chars: prompt.length,
+      title_overridden: !!title,
+      locale,
+      model: skeleton._meta.model,
+      retries: skeleton._meta.retries,
+      duration_ms: skeleton._meta.duration_ms,
+      mock: !!skeleton._meta.mock
+    }
+  });
+
+  res.json({
+    magazine,
+    pages,
+    llm_meta: {
+      model: skeleton._meta.model,
+      duration_ms: skeleton._meta.duration_ms,
+      retries: skeleton._meta.retries,
+      mock: !!skeleton._meta.mock
+    }
   });
 });
 

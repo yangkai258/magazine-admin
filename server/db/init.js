@@ -20,7 +20,7 @@ const defaultData = {
   password_reset_tokens: [],
   email_log: [],
   user_invitations: [],
-  _meta: { schema_version: 5 }
+  _meta: { schema_version: 6 }
 };
 
 let data = loadData();
@@ -72,6 +72,18 @@ function loadData() {
       // v5：升 schema_version（v4 → v5）
       if (!parsed._meta.schema_version || parsed._meta.schema_version < 5) {
         parsed._meta.schema_version = 5;
+        parsed._meta.migrated_at = nowIso;
+        needsSave = true;
+      }
+      // 兼容老 pages 缺字段（v6：AI 一句话生成画册骨架新增 title/body/is_skeleton）
+      parsed.pages.forEach(p => {
+        if (p.title === undefined) p.title = '';
+        if (p.body === undefined) p.body = '';
+        if (p.is_skeleton === undefined) p.is_skeleton = false;
+      });
+      // v6：升 schema_version（v5 → v6）
+      if (!parsed._meta.schema_version || parsed._meta.schema_version < 6) {
+        parsed._meta.schema_version = 6;
         parsed._meta.migrated_at = nowIso;
         needsSave = true;
       }
@@ -566,13 +578,15 @@ function getMagazine(id, { tenantId } = {}) {
     return true;
   });
 }
-function createMagazine(tenantId, { name, upload_date, description, cover_pc, cover_mobile }) {
+function createMagazine(tenantId, { name, upload_date, description, cover_pc, cover_mobile, enabled }) {
   const mag = {
     id: nextId(data.magazines),
     tenant_id: Number(tenantId),
     name, upload_date, description: description || '',
     cover_pc: cover_pc || '', cover_mobile: cover_mobile || '',
-    enabled: 1, created_at: new Date().toISOString()
+    // enabled 不传则默认 1（已上线杂志）；v6.0 AI skeleton 走 0（草稿，待用户上传图后发布）
+    enabled: enabled === undefined ? 1 : (enabled ? 1 : 0),
+    created_at: new Date().toISOString()
   };
   data.magazines.push(mag);
   saveData();
@@ -613,18 +627,45 @@ function getPages(magazineId, { tenantId } = {}) {
     })
     .sort((a, b) => a.page_order - b.page_order);
 }
-function addPage(tenantId, magazineId, imagePath) {
+function addPage(tenantId, magazineId, imagePath, extras) {
   const maxOrder = data.pages.filter(p => p.magazine_id === Number(magazineId)).reduce((max, p) => Math.max(max, p.page_order), 0);
-  const page = { id: nextId(data.pages), tenant_id: Number(tenantId), magazine_id: Number(magazineId), page_order: maxOrder + 1, image_path: imagePath, created_at: new Date().toISOString() };
+  const page = {
+    id: nextId(data.pages),
+    tenant_id: Number(tenantId),
+    magazine_id: Number(magazineId),
+    page_order: maxOrder + 1,
+    image_path: imagePath,
+    title: (extras && typeof extras.title === 'string') ? extras.title : '',
+    body: (extras && typeof extras.body === 'string') ? extras.body : '',
+    is_skeleton: !!(extras && extras.is_skeleton),
+    created_at: new Date().toISOString()
+  };
   data.pages.push(page);
   saveData();
   return page;
 }
-function addPages(tenantId, magazineId, imagePaths) {
+function addPages(tenantId, magazineId, pageInputs) {
+  // pageInputs 支持两种形态：
+  //   旧用法：string[]（仅 image_path）
+  //   新用法：Array<{ image_path, title?, body?, is_skeleton? }>
   const maxOrder = data.pages.filter(p => p.magazine_id === Number(magazineId)).reduce((max, p) => Math.max(max, p.page_order), 0);
-  const newPages = imagePaths.map((image_path, i) => ({
-    id: nextId(data.pages) + i, tenant_id: Number(tenantId), magazine_id: Number(magazineId), page_order: maxOrder + 1 + i, image_path, created_at: new Date().toISOString()
-  }));
+  const newPages = pageInputs.map((input, i) => {
+    const image_path = typeof input === 'string' ? input : input.image_path;
+    const title = (typeof input === 'object' && typeof input.title === 'string') ? input.title : '';
+    const body = (typeof input === 'object' && typeof input.body === 'string') ? input.body : '';
+    const is_skeleton = !!(typeof input === 'object' && input.is_skeleton);
+    return {
+      id: nextId(data.pages) + i,
+      tenant_id: Number(tenantId),
+      magazine_id: Number(magazineId),
+      page_order: maxOrder + 1 + i,
+      image_path,
+      title,
+      body,
+      is_skeleton,
+      created_at: new Date().toISOString()
+    };
+  });
   data.pages.push(...newPages);
   saveData();
   return newPages;
@@ -718,7 +759,7 @@ function snapshotForPublish({ tenantId } = {}) {
       })),
     pages: data.pages
       .filter(p => isLiveTenant(p.tenant_id))
-      .map(p => ({ id: p.id, tenant_id: p.tenant_id, magazine_id: p.magazine_id, page_order: p.page_order, image_path: p.image_path, created_at: p.created_at })),
+      .map(p => ({ id: p.id, tenant_id: p.tenant_id, magazine_id: p.magazine_id, page_order: p.page_order, image_path: p.image_path, title: p.title || '', body: p.body || '', is_skeleton: !!p.is_skeleton, created_at: p.created_at })),
     covers: data.covers
       .filter(c => isLiveTenant(c.tenant_id))
       .map(c => ({ id: c.id, tenant_id: c.tenant_id, magazine_id: c.magazine_id, type: c.type, image_path: c.image_path, created_at: c.created_at }))
