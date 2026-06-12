@@ -12,6 +12,7 @@ const auth = require('./auth');
 const smtp = require('./smtp');
 const payment = require('./payment');
 const aiClient = require('./ai-client');
+const rateLimit = require('./rate-limit');
 
 const app = express();
 app.set('trust proxy', true);
@@ -446,7 +447,11 @@ app.post('/api/admin/tenant/reader-secret/regenerate', auth.requireRole('owner')
 //   auth: owner
 //   body: { prompt: string (1-2000), title?: string (≤80), pageCount?: number 3..20 (default 6), locale?: 'zh-CN' (default) }
 //   行为：调 MiniMax M3 → 返回 name/description/pages → 落库为 enabled=0 草稿杂志 + pageCount 个 is_skeleton page
-//   失败：400 校验错 / 401 未登录 / 403 角色错 / 500 LLM/落库 失败（不暴露 LLM 原始报错）
+//   失败：400 校验错 / 401 未登录 / 403 角色错 / 429 限速 / 500 LLM/落库 失败（不暴露 LLM 原始报错）
+//   v6.1 增量：每租户每日 AI_DAILY_LIMIT（默认 20）次上限。超限 429 + 写 ai_rate_limited 审计。
+//             mock 模式也走限速（同配额）。响应头加 X-RateLimit-Limit / -Remaining / -Reset。
+const AI_DAILY_LIMIT = Math.max(1, Number(process.env.AI_DAILY_LIMIT) || 20);
+const AI_DAILY_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h,每天 0 点按 UTC 对齐（与本地时区无关，行为可预测）
 app.post('/api/admin/ai/skeleton', auth.requireRole('owner'), async (req, res) => {
   const body = req.body || {};
   const prompt = (body.prompt || '').toString().trim();
@@ -468,6 +473,36 @@ app.post('/api/admin/ai/skeleton', auth.requireRole('owner'), async (req, res) =
     if (pageCount < 3 || pageCount > 20) {
       return res.status(400).json({ error: 'pageCount 必须在 3..20 之间' });
     }
+  }
+
+  // ============ v6.1 限速（每租户每日 N 次）============
+  // 在调 LLM 之前拦截,避免产生 MiniMax API 费用
+  const rl = rateLimit.checkAndIncrement(req.tenant.id, 'ai_skeleton', AI_DAILY_LIMIT, AI_DAILY_WINDOW_MS);
+  const remaining = Math.max(0, rl.limit - rl.current);
+  // 响应头 3 个标准字段,前端展示用
+  res.setHeader('X-RateLimit-Limit', String(rl.limit));
+  res.setHeader('X-RateLimit-Remaining', String(remaining));
+  res.setHeader('X-RateLimit-Reset', rl.resetAt);
+  if (!rl.allowed) {
+    // 写 ai_rate_limited 审计（独立 action,大屏可单独计数）
+    auth.audit(req, 'ai_rate_limited', {
+      tenant_id: req.tenant.id,
+      target_type: 'tenant',
+      target_id: req.tenant.id,
+      details: {
+        action_blocked: 'ai_skeleton',
+        limit: rl.limit,
+        current: rl.current,
+        reset_at: rl.resetAt,
+        prompt_chars: prompt.length
+      }
+    });
+    return res.status(429).json({
+      error: `已达今日 AI 生成上限（${rl.limit} 次），明天 0 点重置`,
+      current: rl.current,
+      limit: rl.limit,
+      resetAt: rl.resetAt
+    });
   }
 
   // 调 LLM
@@ -524,7 +559,8 @@ app.post('/api/admin/ai/skeleton', auth.requireRole('owner'), async (req, res) =
       model: skeleton._meta.model,
       retries: skeleton._meta.retries,
       duration_ms: skeleton._meta.duration_ms,
-      mock: !!skeleton._meta.mock
+      mock: !!skeleton._meta.mock,
+      rate_remaining: remaining   // v6.1:记录调用后剩余配额,大屏可直接读 audit_log 求和
     }
   });
 
@@ -536,6 +572,11 @@ app.post('/api/admin/ai/skeleton', auth.requireRole('owner'), async (req, res) =
       duration_ms: skeleton._meta.duration_ms,
       retries: skeleton._meta.retries,
       mock: !!skeleton._meta.mock
+    },
+    rate_limit: {                  // v6.1:响应 body 也带,方便前端即时展示
+      limit: rl.limit,
+      remaining: remaining,
+      reset_at: rl.resetAt
     }
   });
 });

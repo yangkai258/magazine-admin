@@ -24,6 +24,7 @@ node scripts/start-50120.js               # 端口 50100（public）/ 50120（ad
 | `MINIMAX_BASE_URL` | 否 | MiniMax API base URL，默认 `https://api.minimax.chat/v1` |
 | `MINIMAX_MODEL` | 否 | 模型名，默认 `MiniMax-M3` |
 | `MOCK_AI` | 否 | `1` 表示 LLM 走 mock（本地 e2e 联调，不打真实 API） |
+| `AI_DAILY_LIMIT` | 否 | **v6.1** 每租户每日 AI 生成上限，默认 `20`。超限返回 `429`。mock 模式也走限速（同配额）。进程重启清空（内存限速，不持久化）。 |
 
 `.env` 示例（**只放占位符，真实 key 替换 `<your-key>`**）：
 
@@ -32,6 +33,7 @@ MINIMAX_API_KEY=<your-key>
 # MINIMAX_BASE_URL=https://api.minimax.chat/v1
 # MINIMAX_MODEL=MiniMax-M3
 # MOCK_AI=1
+# AI_DAILY_LIMIT=20
 ```
 
 ## 数据 / Schema
