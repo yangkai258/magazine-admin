@@ -802,6 +802,24 @@ function addPages(tenantId, magazineId, pageInputs) {
   saveData();
   return newPages;
 }
+// v6.3 AI 改稿：更新单页的 title / body（不碰 image_path / page_order / is_skeleton）
+// 返回更新后的 page 对象；找不到时返 null
+function updatePage(magazineId, pageId, fields, { tenantId } = {}) {
+  if (!fields || typeof fields !== 'object') return null;
+  const page = data.pages.find(p => {
+    if (p.id !== Number(pageId) || p.magazine_id !== Number(magazineId)) return false;
+    if (tenantId !== undefined && tenantId !== null && p.tenant_id !== Number(tenantId)) return false;
+    return true;
+  });
+  if (!page) return null;
+  // 白名单：只允许改 title / body（其它字段如 image_path / page_order / is_skeleton 不开放给改稿）
+  if (typeof fields.title === 'string') page.title = fields.title;
+  if (typeof fields.body === 'string') page.body = fields.body;
+  page.updated_at = new Date().toISOString();
+  saveData();
+  return page;
+}
+
 function reorderPages(magazineId, orderedIds, { tenantId } = {}) {
   orderedIds.forEach((id, index) => {
     const page = data.pages.find(p => {
@@ -920,7 +938,7 @@ module.exports = {
   addAuditLog, getAuditLogs,
   // magazines
   getAllMagazines, getMagazine, createMagazine, updateMagazine, deleteMagazine,
-  getPages, addPage, addPages, reorderPages, deletePage,
+  getPages, addPage, addPages, updatePage, reorderPages, deletePage,
   getAllCovers, createCover, deleteCover,
   // usage
   getTenantUsage,
