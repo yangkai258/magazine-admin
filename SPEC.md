@@ -989,5 +989,514 @@ api.aiPdfImport = (file, onProgress) => {
 
 ---
 
+## v6.3 增量 — AI 改稿 + 改模板 + 整本重新生成
+
+### 范围
+
+**做**：
+- **每页 AI 改稿 4 actions**（owner only）：重写 / 润色 / 扩写 / 缩短。复用 v6.0 `server/ai-client.js` 客户端，新增 2 个函数 `revisePage` / `reviseMagazine`，**严守 JSON 模式** + system prompt 各自专属。
+- **整本重新生成**（owner only）：基于原 prompt + 已编辑页 context，重新生成整本 `[{page_index, title, body}]` 一次性回写。`POST /api/admin/magazines/:id/revise-all` body=`{actions: {pageIndex: action}}`（per-page action map）。
+- **改模板 4 属性 + 元素库**（owner only）：3 套内置样板（`business` / `education` / `minimal`），每套含 `colors` / `fonts` / `layout` / `elements` 4 维度。新建 `server/templates.js` 独立模块；`magazine.template_id` 字段 schema 兼容（v6.0/v6.1/v6.2 旧数据缺省 `null`）。
+- **模板选型实时预览**：`GET /api/admin/magazines/:id/template-preview` → `{css_vars, element_classes}`，前端用 `document.documentElement.style.setProperty(...)` 注入 CSS 变量 + 给 body 加 class。
+- **前端整合**：`public/admin/magazine/edit.html`（独立页，跟 `list.html` 区分）—— 顶部「整本重新生成」按钮（弹 confirm modal 明示「将消耗 N 次 AI 配额」）+ 每页 4 actions 下拉 + 右侧换模板面板（3 套卡片 + 实时预览 + 恢复默认）。
+- **审计 + 限速**：改稿写 `audit_log action='ai_revise_page' | 'ai_revise_magazine'` + 复用 v6.1 `ai_skeleton` 限速桶（整本算 `pages.length` 次/天）。
+- **e2e mock 验证**：新增 `scripts/test-revise-template.js` 跑通 4 actions + 3 套模板 schema + preview 生成（**不**依赖 server 起来；沿用 v6.0-v6.2 沙箱兜底模式）。
+
+**不做**（明确砍掉，留 v6.4+）：
+- ❌ **自动套版**（用户必须手动触发 / 手动选模板，不做"打开杂志自动按业务类型推荐模板"）
+- ❌ **OCR 文字层**（v6.2 候选遗留，纯 LLM 视觉/文本理解）
+- ❌ **跨租户 AI benchmark**（v6.0/v6.1/v6.2 候选遗留，平台管理员视角本期不动）
+- ❌ **外部素材库接入**（本期模板 = 3 套内置 hardcoded，**不**接 UI8 / 千图网 / Pinterest）
+- ❌ **多模型路由**（仍锁死 MiniMax-M3；v6.4+ 评估）
+- ❌ **改稿后再 OCR / PDF 二次导入**（本期仅改稿 + 改模板，不引入新内容源）
+- ❌ **模板组合 / 渐变**（3 套样板独立可选，**不**支持「商务 + 极简混搭」）
+
+### 依赖
+
+**零新 npm 包**。v6.3 100% 复用 v6.0/v6.1/v6.2 已有栈：
+
+| 复用项 | 用途 |
+|--------|------|
+| `server/ai-client.js` v6.0 MiniMax 客户端 | 改稿 / 整本重生成本期新增 2 函数 |
+| `server/rate-limit.js` v6.1 限速器 | 改稿算 `ai_skeleton` 桶 |
+| `server/db/init.js` `getMagazine` / `updateMagazine` | 写 `pages.title` / `pages.body` / `template_id` |
+| `multer` 已有 | 不动 |
+
+### 复用：`server/ai-client.js` 新增 2 函数
+
+**不**改 v6.0 `generateMagazineSkeleton` / v6.2 `analyzePdfPages`。新增独立函数：
+
+#### `revisePage({ page, action, locale })`
+
+**Action 枚举**：`'rewrite' | 'polish' | 'expand' | 'shorten'`
+
+**返回**：
+```js
+{ title: string, body: string, _meta: { model, duration_ms, retries, mock, action } }
+```
+
+**System Prompt 强约束（按 action 切 4 套）**：
+```
+你是资深画册编辑，**严格保持业务事实不变**（产品名 / 数据 / 人名 / 地点 / 时间），仅按以下目标调整风格 / 长度：
+
+[rewrite]   完整重写：保留核心信息点，重组结构、句式、用词，整体焕新但仍紧扣主题
+[polish]    润色：消除冗余、提升文采、修正语病，保持原意 + 原长度 ±10%
+[expand]    扩写：增加细节描写 / 背景说明 / 案例佐证，长度 +50% ~ +100%
+[shorten]   缩短：保留核心信息，砍掉修饰，长度 -40% ~ -60%
+
+严格按以下 JSON 结构输出，**不**输出 JSON 之外任何字符：
+{
+  "title": "5-20 字页标题",
+  "body":  "正稿（按 action 约束长度）"
+}
+
+约束：
+1) **绝不**编造原页中未出现的产品 / 数据 / 人名
+2) **绝不**输出 markdown / 代码块包裹符
+3) title 字数 5-20，body 字数按 action 区间
+4) JSON 字段顺序严格按 schema
+```
+
+#### `reviseMagazine({ originalPrompt, pages, locale })`
+
+**返回**：
+```js
+{
+  pages: [{ page_index: 1, title: string, body: string }],
+  _meta: { model, duration_ms, retries, mock }
+}
+```
+
+**System Prompt 强约束**：
+```
+你是资深画册编辑，**基于原 prompt 主题 + 尊重用户已编辑页的 context**，重新生成整本画册：
+
+原 prompt 主题：<originalPrompt>
+已有页数：N
+用户已编辑页 context（JSON）：
+[ { page_index, title, body, is_user_edited }, ... ]
+
+约束：
+1) 输出 pages 长度 == N
+2) 严格按 page_index 升序输出
+3) **is_user_edited=true 的页**：保留其 title + body 不变（**不**改写用户已编辑内容）
+4) **is_user_edited=false 的页**：重新生成，仍严守原 prompt 主题 + 不引入新事实
+5) **绝不**输出 JSON 之外任何字符
+6) 严格按以下 schema：
+   { "pages": [{ "page_index": 1, "title": "5-20 字", "body": "100-300 字" }] }
+```
+
+**Mock 模式**（`MOCK_AI=1`）：返回固定 mock 数据（4 actions 各自 mock + 整本 mock 数组），跟 v6.0/v6.2 mock 风格一致。
+
+**Retry 策略**：同 v6.0（5s / 15s / 30s 退避，最多 3 次）。JSON 校验失败 → 抛 `AI_PARSE_ERROR`。
+
+### 新建：`server/templates.js`
+
+**独立模块**（不污染 `admin.js`；3 套样板 hardcoded 常量 + 注释允许后期切 DB）：
+
+```js
+const TEMPLATES = {
+  business: {
+    id: 'business',
+    name: '商务深蓝',
+    description: '企业年报 / 产品画册 / 商务宣传 — 深蓝主色 + 思源黑体 + 顶部 banner',
+    colors: { primary: '#1E3A8A', accent: '#3B82F6', bg: '#F8FAFC', text: '#0F172A' },
+    fonts:  { heading: '"Source Han Sans SC", "Noto Sans SC", sans-serif', body: '"Source Han Sans SC", "Noto Sans SC", sans-serif' },
+    layout: { coverStyle: 'banner', footerStyle: 'line' },
+    elements: { iconSet: 'star', divider: 'line', card: 'sharp' }
+  },
+  education: {
+    id: 'education',
+    name: '教育暖橙',
+    description: '校园画册 / 培训手册 / 课程介绍 — 暖橙主色 + 思源宋体 + 圆角卡 + 角标 icon',
+    colors: { primary: '#EA580C', accent: '#F59E0B', bg: '#FFFBEB', text: '#7C2D12' },
+    fonts:  { heading: '"Source Han Serif SC", "Noto Serif SC", serif', body: '"Source Han Sans SC", "Noto Sans SC", sans-serif' },
+    layout: { coverStyle: 'full', footerStyle: 'simple' },
+    elements: { iconSet: 'book', divider: 'dots', card: 'rounded' }
+  },
+  minimal: {
+    id: 'minimal',
+    name: '极简纯黑',
+    description: '高端品牌 / 极简风 / 杂志感 — 纯黑 + Inter + 全宽 + 极细分隔线',
+    colors: { primary: '#111827', accent: '#6B7280', bg: '#FFFFFF', text: '#111827' },
+    fonts:  { heading: 'Inter, "Helvetica Neue", sans-serif', body: 'Inter, "Helvetica Neue", sans-serif' },
+    layout: { coverStyle: 'split', footerStyle: 'none' },
+    elements: { iconSet: 'none', divider: 'line', card: 'none' }
+  }
+};
+```
+
+**导出**：
+```js
+function listTemplates()                          // → 3 套模板
+function getTemplate(id)                          // → 单套模板（id 不存在 → null）
+function validateTemplateSchema(template)         // → {ok, errors[]}（字段非空 + enum 校验）
+function getTemplatePreview(magazine, templateId)  // → {css_vars, element_classes}（前端拿去 set CSS 变量 + 加 class）
+```
+
+**Schema 校验规则**：
+- `colors` 4 字段必填（`primary` / `accent` / `bg` / `text`），每条 hex 颜色匹配 `^#[0-9A-Fa-f]{6}$`
+- `fonts` 2 字段必填（`heading` / `body`），非空字符串
+- `layout` 2 字段必填，enum：`coverStyle ∈ {banner, full, split}`，`footerStyle ∈ {simple, line, none}`
+- `elements` 3 字段必填，enum：`iconSet ∈ {star, arrow, book, none}`，`divider ∈ {line, dots, wave}`，`card ∈ {rounded, sharp, none}`
+
+**`getTemplatePreview` 实现要点**：
+```js
+function getTemplatePreview(magazine, templateId) {
+  const t = TEMPLATES[templateId];
+  if (!t) return null;
+  return {
+    css_vars: {
+      '--tpl-primary': t.colors.primary,
+      '--tpl-accent':  t.colors.accent,
+      '--tpl-bg':      t.colors.bg,
+      '--tpl-text':    t.colors.text,
+      '--tpl-font-heading': t.fonts.heading,
+      '--tpl-font-body':    t.fonts.body
+    },
+    element_classes: {
+      'data-cover-style':    t.layout.coverStyle,    // body[data-cover-style="banner"]
+      'data-footer-style':   t.layout.footerStyle,
+      'data-icon-set':       t.elements.iconSet,
+      'data-divider':        t.elements.divider,
+      'data-card':           t.elements.card
+    }
+  };
+}
+```
+
+### 新端点（5 个）
+
+#### 1. `POST /api/admin/magazines/:id/pages/:pageIndex/revise`
+
+**Auth**：`auth.requireRole('owner')`。
+
+**Request body**：
+```json
+{ "action": "rewrite" | "polish" | "expand" | "shorten" }
+```
+
+**处理流程**：
+```
+1. 校验 action 枚举 → 422
+2. 校验 magazine 存在 + 属当前租户 → 404
+3. 校验 pageIndex 1-based 越界 → 404
+4. 限速：rateLimit.checkAndIncrement(tenant.id, 'ai_skeleton', 1)
+   → 失败 → 429 + audit ai_rate_limited
+5. 调 aiClient.revisePage({ page, action, locale })
+   → 3 次退避 + JSON 强约束
+6. 更新 pages[i].title + body（is_skeleton=false，is_user_edited=true）
+7. 写 audit_log action='ai_revise_page' details.{action, page_index, duration_ms, retries, rate_remaining}
+8. 返回 { title, body, page_index, _meta }
+```
+
+**200 OK**：
+```json
+{
+  "page_index": 3,
+  "title": "重写后的标题",
+  "body":  "重写后的正稿",
+  "is_user_edited": true,
+  "_meta": { "model": "MiniMax-M3", "duration_ms": 2345, "retries": 0, "mock": false, "action": "rewrite" }
+}
+```
+
+**4xx / 5xx**：
+- `401`：未登录
+- `403`：当前角色不是 owner
+- `404`：magazine 不存在 / 跨租户 / pageIndex 越界
+- `422`：action 不在 4 枚举内 / body 缺 action 字段
+- `429`：限速命中（v6.1 标准 429 body + `X-RateLimit-*` 头）
+- `500 MINIMAX_API_KEY not configured`：env 缺失
+- `500 AI_PARSE_ERROR`：LLM 3 次重试后仍 JSON 解析失败
+- `500 AI_UPSTREAM_ERROR` / `AI_UPSTREAM_TIMEOUT` / `AI_UPSTREAM_5XX`：同 v6.0
+- `502`：LLM 调用整体失败（用于 422/500 之外的上游不可达）
+
+#### 2. `POST /api/admin/magazines/:id/revise-all`
+
+**Auth**：`auth.requireRole('owner')`。
+
+**Request body**：
+```json
+{ "actions": { "1": "polish", "2": "expand", "3": "shorten" } }
+```
+**per-page action map**（key = page_index 字符串，value = 4 枚举之一）。允许只覆盖部分页 → 未指定的页用 `polish` 默认。
+
+**处理流程**：
+```
+1. 校验 actions 对象所有 value 在 4 枚举内 → 422
+2. 校验 magazine 存在 + 属当前租户 → 404
+3. 限速：rateLimit.checkAndIncrement(tenant.id, 'ai_skeleton', pages.length)
+   → 失败 → 429 + audit ai_rate_limited（**一次性扣 pages.length 次**，不部分扣）
+   → 前端 confirm modal **必须**明示「将消耗 N 次 AI 配额」（N = pages.length）
+4. 调 aiClient.reviseMagazine({ originalPrompt, pages, locale })
+   → 3 次退避
+5. 逐页回写 title + body（按 page_index 匹配，**不**按数组顺序）
+6. 写 audit_log action='ai_revise_magazine' details.{pages_count, duration_ms, retries, rate_remaining, action_map}
+7. 返回 { pages: [...], _meta }
+```
+
+**限速语义（重要）**：
+- 整本算 `pages.length` 次/天（前端 confirm modal 必须明示消耗数）
+- 部分页策略不友好：要么全成功要么全失败（失败 → audit 失败路径 + rollback 已写页）
+- 限速拒绝时**不**消耗配额
+
+**200 OK**：
+```json
+{
+  "pages": [
+    { "page_index": 1, "title": "...", "body": "...", "is_user_edited": false },
+    { "page_index": 2, "title": "...", "body": "...", "is_user_edited": false }
+  ],
+  "_meta": { "model": "MiniMax-M3", "duration_ms": 8765, "retries": 1, "mock": false, "pages_count": 6 }
+}
+```
+
+**4xx / 5xx**：同 `/revise` + 多 1 个：
+- `422 actions` 不是对象 / value 不在 4 枚举内
+- `400` `actions` 为空对象（不允许"整本重生成但不指定任何 action"）
+- 5xx 同 `/revise`
+
+#### 3. `GET /api/admin/templates`
+
+**Auth**：`auth.requireAuth`（owner/editor/viewer 都能读，**不**限定 owner 因为前端 `edit.html` 之外未来可能其他地方要列模板）。
+
+**200 OK**：
+```json
+{
+  "templates": [
+    { "id": "business",  "name": "商务深蓝", "description": "...", "colors": {...}, "fonts": {...}, "layout": {...}, "elements": {...} },
+    { "id": "education", "name": "教育暖橙", "description": "...", "colors": {...}, "fonts": {...}, "layout": {...}, "elements": {...} },
+    { "id": "minimal",   "name": "极简纯黑", "description": "...", "colors": {...}, "fonts": {...}, "layout": {...}, "elements": {...} }
+  ]
+}
+```
+
+#### 4. `PUT /api/admin/magazines/:id/template`
+
+**Auth**：`auth.requireRole('owner')`。
+
+**Request body**：
+```json
+{ "template_id": "business" | "education" | "minimal" | null }
+```
+`null` = 恢复默认（清 `template_id`）。
+
+**处理流程**：
+```
+1. 校验 template_id 在 3 枚举内 OR === null → 422
+2. 校验 magazine 存在 + 属当前租户 → 404
+3. updateMagazine(id, { template_id })
+4. 写 audit_log action='ai_set_template' details.{template_id, prev_template_id}
+5. 返回 { magazine: { id, template_id } }
+```
+
+**4xx / 5xx**：
+- `401` / `403` / `404`：同标准
+- `422`：template_id 不在 3 枚举内且 !== null
+
+#### 5. `GET /api/admin/magazines/:id/template-preview`
+
+**Auth**：`auth.requireRole('owner', 'editor')`（owner / editor 都能看，viewer 不行）。
+
+**处理流程**：
+```
+1. 校验 magazine 存在 + 属当前租户 → 404
+2. 取 magazine.template_id（缺省 null → 返默认 css_vars 兜底）
+3. 调 templates.getTemplatePreview(magazine, template_id)
+4. 返回 { css_vars, element_classes, applied_template_id }
+```
+
+**200 OK**（未选模板 / 选了 `business`）：
+```json
+{
+  "css_vars": {
+    "--tpl-primary": "#1E3A8A",
+    "--tpl-accent":  "#3B82F6",
+    "--tpl-bg":      "#F8FAFC",
+    "--tpl-text":    "#0F172A",
+    "--tpl-font-heading": "\"Source Han Sans SC\", \"Noto Sans SC\", sans-serif",
+    "--tpl-font-body":    "\"Source Han Sans SC\", \"Noto Sans SC\", sans-serif"
+  },
+  "element_classes": {
+    "data-cover-style":  "banner",
+    "data-footer-style": "line",
+    "data-icon-set":     "star",
+    "data-divider":      "line",
+    "data-card":         "sharp"
+  },
+  "applied_template_id": "business"
+}
+```
+
+**4xx / 5xx**：
+- `401` / `403` / `404`：同标准
+- `200 null`：未选模板时返 css_vars 全空 + element_classes 全 `default` + `applied_template_id: null`
+
+### Schema 兼容
+
+**`magazine.template_id` 字段新增**（v6.0/v6.1/v6.2 旧数据无该字段 → 默认 `null`）：
+
+`server/db/init.js` `getMagazine(id)` 返回对象加 `template_id` 字段（缺省 `null`）；不破坏老 schema。
+
+`pages[i].is_user_edited` 字段新增（v6.0/v6.1/v6.2 旧 page 无该字段 → 默认 `false`）：在 `/revise` 和 `/revise-all` 写库时设置为 `true`（标识该页被用户/AI 改稿过；`reviseMagazine` 中严守"is_user_edited=true 的页不重写"）。
+
+**`_meta.schema_version`**：6 → 7（v6.3 升级标识）。
+
+**审计兼容**：`ai_revise_page` / `ai_revise_magazine` / `ai_set_template` 3 个新 action 不影响 v6.0/v6.1/v6.2 既有 4 个 action（`ai_generate_skeleton` / `ai_rate_limited` / `ai_pdf_import` / `ai_pdf_import_failed`）。
+
+### 限速
+
+**复用 v6.1 `ai_skeleton` 桶**（**不**新增独立桶）：
+
+| 端点 | 消耗次数 | 备注 |
+|------|---------|------|
+| `POST /revise`（单页） | 1 次/天 | 同 v6.0 单次调用 |
+| `POST /revise-all`（整本） | `pages.length` 次/天 | 前端 confirm modal **必须**明示「将消耗 N 次 AI 配额」 |
+| `PUT /template` | 0 次（纯 DB 写） | 不调 LLM |
+| `GET /templates` | 0 次 | 读硬编码 |
+| `GET /template-preview` | 0 次 | 读硬编码 |
+
+**429 响应 + 响应头**同 v6.1（`X-RateLimit-Limit` / `-Remaining` / `-Reset` + body `{ error, current, limit, resetAt }`）。
+
+**限速拒绝时**写 `audit_log action='ai_rate_limited' details.action_blocked='ai_revise_page' | 'ai_revise_magazine'`。
+
+### 审计
+
+每次成功 / 失败都写 `audit_log`：
+
+| 场景 | action | details 关键字段 |
+|------|--------|------------------|
+| 单页改稿成功 | `ai_revise_page` | `action`, `page_index`, `model`, `mock`, `duration_ms`, `retries`, `rate_remaining` |
+| 单页改稿失败 | `ai_revise_page` | `action`, `page_index`, `error`（如 `AI_PARSE_ERROR`）, `retries` |
+| 整本重生成成功 | `ai_revise_magazine` | `pages_count`, `action_map`, `model`, `mock`, `duration_ms`, `retries`, `rate_remaining` |
+| 整本重生成失败 | `ai_revise_magazine` | `pages_count`, `action_map`, `error`, `retries`, `rolled_back` |
+| 设模板 | `ai_set_template` | `template_id`, `prev_template_id` |
+| 改稿 / 整本被限速 | `ai_rate_limited` | `action_blocked: 'ai_revise_page' \| 'ai_revise_magazine'` |
+
+### 前端页：`public/admin/magazine/edit.html`
+
+**位置**：admin 后台独立页（**不**嵌入既有 iframe；跟 `list.html` 区分）。
+
+**4 大区域布局**：
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ [← 返回] 杂志名 (id=124, enabled=0)            [🔁 整本重新生成] │  ← 顶栏
+├──────────────────────────────────────────────────────────────────┤
+│ ┌─ pages 列表 ──────────────────┐ ┌─ 换模板面板 ──────────────┐ │
+│ │ 1. [title] [body...]          │ │ ┌────┐ ┌────┐ ┌────┐      │ │
+│ │    [AI 改稿 ▼] [重写|润色|...]│ │ │商务│ │教育│ │极简│      │ │
+│ │                                │ │ └────┘ └────┘ └────┘      │ │
+│ │ 2. [title] [body...]          │ │ 当前：business            │ │
+│ │    [AI 改稿 ▼] ...             │ │ [恢复默认]                 │ │
+│ │                                │ │                           │ │
+│ │ ...                            │ │ 实时预览 (--tpl-primary)  │ │
+│ └────────────────────────────────┘ └───────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**整本重新生成 confirm modal**（**必须**明示配额）：
+```html
+<div class="modal">
+  整本重新生成将消耗 <strong>6 次</strong> AI 配额（pages 长度 = 6）。
+  是否继续？
+  [取消] [确认]
+</div>
+```
+
+**每页 4 actions 下拉**：
+- `<select>` 4 option：重写 / 润色 / 扩写 / 缩短
+- 选完触发 `api.revisePage(magazineId, pageIndex, action)` → 期间行内 spinner → 完成后实时替换 title + body
+- 失败（429/500）→ 行内错误条 + 保留原内容
+
+**换模板面板**：
+- 3 套卡片（缩略图用 inline SVG 模拟：3 条主色横条 + 元素小 icon）
+- 点击 → `api.setTemplate(magazineId, templateId)` → `api.getTemplatePreview(magazineId)` → 把 `css_vars` 注入 `:root` + 给 body 加 `data-cover-style` 等 attribute
+- 「恢复默认」按钮 → `setTemplate(magazineId, null)`
+
+**XSS 防护**：
+- AI 改稿返回的 title/body 一律 `textContent` 渲染，**禁止** `.innerHTML = aiOutput`
+- 模板名 / 描述用 `textContent`
+- 错误条提示用 `textContent`
+
+**API 客户端**（`public/admin/js/api.js` 末尾追加 5 个函数）：
+```js
+api.revisePage = (magazineId, pageIndex, action) => fetchJSON(
+  `/api/admin/magazines/${magazineId}/pages/${pageIndex}/revise`,
+  { method: 'POST', body: { action } }
+);
+api.reviseAll = (magazineId, actions) => fetchJSON(
+  `/api/admin/magazines/${magazineId}/revise-all`,
+  { method: 'POST', body: { actions } }
+);
+api.setTemplate = (magazineId, templateId) => fetchJSON(
+  `/api/admin/magazines/${magazineId}/template`,
+  { method: 'PUT', body: { template_id: templateId } }
+);
+api.getTemplatePreview = (magazineId) => fetchJSON(
+  `/api/admin/magazines/${magazineId}/template-preview`,
+  { method: 'GET' }
+);
+api.listTemplates = () => fetchJSON(`/api/admin/templates`, { method: 'GET' });
+```
+
+**nav.js 入口**：在 `magazine-list` 后插入 `magazine-edit` 项（key=`magazine-edit`，label=`杂志编辑`，icon=`edit`，role=`owner`）。
+
+### 失败模式
+
+| 场景 | 行为 | 状态码 |
+|------|------|--------|
+| `MINIMAX_API_KEY` 未设 | 端点直接 500 + 明确错误 | 500 |
+| action 不在 4 枚举内 | 422 + 明确错误 | 422 |
+| `actions` 不是对象 / value 越界 | 422 | 422 |
+| `actions` 为空对象 | 400 | 400 |
+| magazine 不存在 / 跨租户 | 404 | 404 |
+| pageIndex 越界（< 1 或 > pages.length） | 404 | 404 |
+| template_id 不在 3 枚举内且 !== null | 422 | 422 |
+| MiniMax 5xx | 退避重试 5s/15s/30s，3 次仍失败 | 503 |
+| JSON parse 失败 | 退避重试，3 次仍失败 | 500 AI_PARSE_ERROR |
+| 限速命中（单页） | 429 + 写 `audit_log ai_rate_limited` | 429 |
+| 限速命中（整本） | 429（**不**扣部分配额） | 429 |
+| LLM 成功但 page 回写失败 | 错误码 + 已成功的 page 不回滚（best-effort） | 500 |
+| viewer 角色访问 `/revise` / `/template` | 403 | 403 |
+| 未登录 | 401 | 401 |
+| magazine 未启用（草稿） | 允许改稿（草稿阶段可改） | 200 |
+
+### Env 变量
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `AI_DAILY_LIMIT` | `20`（v6.1 默认） | 改稿复用此上限（**不**新增变量） |
+| `AI_DAILY_WINDOW_MS` | `86400000`（v6.1 默认） | 同上 |
+| `MOCK_AI` | `0` | mock 模式也走限速（**不**绕过），跟 v6.0/v6.1/v6.2 一致 |
+
+### 非目标（v6.3 明确不做）
+
+- ❌ **自动套版**（打开杂志自动按业务类型推荐模板，**不**做）
+- ❌ **OCR 文字层**（v6.2 候选遗留，纯 LLM 视觉/文本理解）
+- ❌ **跨租户 AI benchmark**（v6.0/v6.1/v6.2 候选遗留，平台管理员视角本期不动）
+- ❌ **外部素材库接入**（3 套内置 hardcoded，**不**接 UI8 / 千图网）
+- ❌ **多模型路由**（仍锁死 MiniMax-M3；v6.4+ 评估）
+- ❌ **改稿后再 OCR / PDF 二次导入**（本期仅改稿 + 改模板，不引入新内容源）
+- ❌ **模板组合 / 渐变**（3 套样板独立可选，**不**支持混搭）
+- ❌ **改稿历史 / undo**（本期改稿直接覆盖，**不**留 history table；v6.4+ 评估）
+- ❌ **模板 UI 主题切换**（v6.4+ 评估，dark mode 之类）
+- ❌ **短链分享**（v6.1 候选遗留；本期不动）
+
+### v6.4 候选
+
+1. **短链分享**（v6.1 候选遗留）：reader 端用更短 / 一次性 token 替代当前 `?t=&s=`
+2. **OCR 文字层**（v6.2 候选遗留）：PDF → 文字层抽取 + LLM 视觉双轨合并
+3. **跨租户 benchmark**（v6.0/v6.1/v6.2 候选遗留）：平台管理员视角看各租户 AI 用量 / 模板偏好 / 改稿频率
+4. **改稿历史 / undo**（v6.3 新增候选）：每页改稿前快照到 `pages_history` 表，UI 提供 5 步回滚
+5. **失败 audit 改造**（v6.1 遗留）：v6.0 失败分支补 audit，让大屏 `failed` 不再恒为 0
+6. **限速持久化到 data.json**（v6.1 遗留）：进程重启不丢配额
+7. **滑动窗口限速**（v6.1 遗留）：sliding window 行为更平滑
+8. **多模型路由**（v6.0 遗留）：拆 `ai-client` 抽象层，支持 Claude / GPT-4 切换
+9. **模板中心**（v6.0 砍掉重提）：把 3 套内置样板挪到 DB 表，platform admin 可视化增删
+10. **OSS 上传**（v6.2 遗留）：草稿 → 发布后自动同步到 OSS
+11. **PDF 二次编辑**（v6.2 候选遗留）：单页重新生成（"重写第 3 页"）
+
+---
 
 
