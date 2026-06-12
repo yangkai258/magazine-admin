@@ -105,3 +105,108 @@ api.aiPdfImport = (file, onProgress) => {
     xhr.send(form);
   });
 };
+
+// ============================================================================
+// v6.3 AI 改稿（单页 + 整本）+ 模板预览 5 个 API
+// ============================================================================
+//
+// 1) api.revisePage(magazineId, pageIndex, action)
+//    - 后端：POST /api/admin/magazines/:id/pages/:pageIndex/revise
+//    - body: { action: 'rewrite'|'polish'|'expand'|'shorten' }
+//    - 用 XHR 而非 fetch 是为了和 aiPdfImport 风格统一 + 拿到精确 status 码做错误分支处理
+//    - 成功：{ page: { title, body }, magazine: {...} }
+//    - 限速：v6.1 沿用；429 走 err.status === 429 分支
+//
+// 2) api.reviseAll(magazineId, perPageActions)
+//    - 后端：POST /api/admin/magazines/:id/revise-all
+//    - body: { actions: ['polish','expand',...] }  // 长度 = pages.length；每个元素 = per-page action
+//    - 成功：{ pages: [{title, body}, ...], magazine: {...} }
+//
+// 3) api.setTemplate(magazineId, templateId, overrides?)
+//    - 后端：PUT /api/admin/magazines/:id/template
+//    - body: { template_id: 'business'|'education'|'minimal'|null, overrides?: {...} }
+//    - 成功：{ magazine: {...} }
+//
+// 4) api.getTemplatePreview(magazineId)
+//    - 后端：GET /api/admin/magazines/:id/template-preview
+//    - 成功：{ template_id, template_name, css_vars: {...}, element_classes: {...} }
+//
+// 5) api.listTemplates()
+//    - 后端：GET /api/admin/templates
+//    - 成功：[{ id, name, description, colors, fonts, layout, elements }, ...]
+//
+// 共同约定：
+//   - 全部 owner-only（除 listTemplates 也是 admin 端读）；
+//   - 错误统一抛 Error + err.status（401/403/404/422/429/500 分支见 edit.html）；
+//   - 不写全局 state，调用方拿到响应后自行更新 UI。
+
+api.revisePage = function (magazineId, pageIndex, action) {
+  return new Promise(function (resolve, reject) {
+    if (magazineId == null || pageIndex == null || !action) {
+      var e = new Error('revisePage 必填 magazineId / pageIndex / action');
+      e.status = -1;
+      return reject(e);
+    }
+    var xhr = new XMLHttpRequest();
+    xhr.onload = function () {
+      var status = xhr.status;
+      var raw = xhr.responseText;
+      var parsed = null;
+      try { parsed = raw ? JSON.parse(raw) : null; } catch (_) { parsed = null; }
+      if (status >= 200 && status < 300) {
+        resolve(parsed || {});
+        return;
+      }
+      var msg = (parsed && (parsed.message || parsed.error)) || raw || ('HTTP ' + status);
+      var err = new Error(msg);
+      err.status = status;
+      err.body = parsed;
+      reject(err);
+    };
+    xhr.onerror = function () {
+      var err = new Error('网络错误，请检查连接后重试');
+      err.status = 0;
+      reject(err);
+    };
+    xhr.onabort = function () {
+      var err = new Error('请求已取消');
+      err.status = -1;
+      reject(err);
+    };
+    var url = API_BASE + '/admin/magazines/' + encodeURIComponent(magazineId) +
+              '/pages/' + encodeURIComponent(pageIndex) + '/revise';
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.withCredentials = true;
+    xhr.send(JSON.stringify({ action: action }));
+  });
+};
+
+// reviseAll：整本重生成（per-page action map）
+// 后端：POST /api/admin/magazines/:id/revise-all body={ actions: ['polish','expand',...] }
+api.reviseAll = function (magazineId, perPageActions) {
+  return api.post('/admin/magazines/' + encodeURIComponent(magazineId) + '/revise-all', {
+    actions: perPageActions
+  });
+};
+
+// setTemplate：设置 / 清除 magazine 的 template_id
+// 后端：PUT /api/admin/magazines/:id/template body={ template_id, overrides? }
+// template_id === null 时为「恢复默认」（后端会写 null）
+api.setTemplate = function (magazineId, templateId, overrides) {
+  var payload = { template_id: templateId == null ? null : templateId };
+  if (overrides && typeof overrides === 'object') payload.overrides = overrides;
+  return api.put('/admin/magazines/' + encodeURIComponent(magazineId) + '/template', payload);
+};
+
+// getTemplatePreview：拿当前 magazine 的 css_vars + element_classes（用于实时预览注入）
+// 后端：GET /api/admin/magazines/:id/template-preview
+api.getTemplatePreview = function (magazineId) {
+  return api.get('/admin/magazines/' + encodeURIComponent(magazineId) + '/template-preview');
+};
+
+// listTemplates：列 3 套内置样板
+// 后端：GET /api/admin/templates
+api.listTemplates = async function () {
+  return api.get('/admin/templates');
+};

@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>杂志编辑 · AI 改稿 + 换模板 · 杂志管理平台</title>
+  <link rel="stylesheet" href="/admin/css/style.css?v=3">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script src="/admin/js/nav.js?v=3"></script>
+  <script src="/admin/js/topbar.js?v=3"></script>
+  <style>
+    /* ============================================================
+       AI 改稿 + 换模板 专用样式（沿用 ai-generate / ai-pdf 风格）
+       ============================================================ */
+    .ai-hero {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 22px 26px;
+      margin-bottom: 20px;
+      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.18);
+      position: relative;
+      overflow: hidden;
+    }
+    .ai-hero::before {
+      content: "";
+      position: absolute; top: -40px; right: -40px;
+      width: 180px; height: 180px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 50%;
+    }
+    .ai-hero h2 {
+      font-size: 18px; font-weight: 700; margin-bottom: 6px;
+      display: flex; align-items: center; gap: 8px;
+      position: relative; z-index: 1;
+    }
+    .ai-hero p {
+      font-size: 13px; line-height: 1.7; opacity: 0.95;
+      position: relative; z-index: 1; max-width: 820px;
+    }
+    .ai-hero .hero-badges { display: inline-flex; gap: 6px; margin-top: 10px; position: relative; z-index: 1; }
+    .ai-hero .hero-badge {
+      display: inline-block; padding: 2px 10px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 12px; font-size: 11px; font-weight: 500;
+    }
+
+    /* 顶部条：magazine 选择器 + 整本按钮 */
+    .mag-toolbar {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .mag-toolbar .mag-title {
+      font-size: 16px; font-weight: 700; color: var(--text);
+      display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+    }
+    .mag-toolbar .mag-title .mag-name {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      max-width: 420px;
+    }
+    .mag-toolbar .mag-meta {
+      font-size: 12px; color: var(--text-secondary); font-weight: 400;
+    }
+    .mag-toolbar .mag-pill {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 500;
+      background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe;
+    }
+    .mag-toolbar select {
+      padding: 6px 10px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 13px; background: #fff;
+      max-width: 280px;
+    }
+
+    /* 2 列布局：左 pages / 右 templates */
+    .ai-edit-layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 960px) {
+      .ai-edit-layout { grid-template-columns: 1fr; }
+    }
+
+    /* 通用卡片 */
+    .ai-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .ai-card-title {
+      font-size: 15px; font-weight: 600; margin-bottom: 4px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .ai-card-hint { font-size: 12px; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.6; }
+
+    /* 错误条 */
+    .ai-error-bar {
+      display: none;
+      background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+      padding: 10px 14px; border-radius: 6px; font-size: 13px;
+      margin-bottom: 16px; line-height: 1.6;
+    }
+    .ai-error-bar.show { display: block; }
+    .ai-error-bar .ai-error-close {
+      float: right; background: none; border: none; color: #991b1b;
+      cursor: pointer; font-size: 16px; line-height: 1; padding: 0 0 0 8px;
+    }
+    .ai-error-bar.warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+
+    /* spinner */
+    .ai-spinner {
+      display: inline-block; width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: ai-spin 0.7s linear infinite;
+      margin-right: 4px; vertical-align: -2px;
+    }
+    .ai-spinner.dark { border-color: rgba(0,0,0,0.15); border-top-color: var(--primary); }
+    @keyframes ai-spin { to { transform: rotate(360deg); } }
+
+    /* ============================================================
+       Pages 列表（每页带 AI 改稿下拉）
+       ============================================================ */
+    .ai-pages { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+    .ai-page {
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 14px 16px; background: #fafafa;
+      position: relative;
+      transition: background 0.2s;
+    }
+    .ai-page.busy { background: #eef2ff; border-color: #c7d2fe; }
+    .ai-page-head {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    }
+    .ai-page-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--primary); color: #fff;
+      font-size: 12px; font-weight: 700; flex-shrink: 0;
+    }
+    .ai-page-title-text {
+      flex: 1; min-width: 0;
+      font-size: 14px; font-weight: 600; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ai-page-title-text .placeholder { color: var(--text-secondary); font-weight: 400; font-style: italic; }
+
+    /* AI 改稿下拉 */
+    .ai-revise-dd { position: relative; }
+    .ai-revise-dd .ai-revise-btn {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #fff; border: none; padding: 5px 12px; border-radius: 5px;
+      font-size: 12px; font-weight: 500; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .ai-revise-dd .ai-revise-btn:hover:not(:disabled) {
+      filter: brightness(1.08);
+    }
+    .ai-revise-dd .ai-revise-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .ai-revise-dd .ai-revise-menu {
+      display: none;
+      position: absolute; right: 0; top: calc(100% + 4px);
+      background: #fff; border: 1px solid var(--border); border-radius: 6px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+      min-width: 160px; z-index: 30; overflow: hidden;
+    }
+    .ai-revise-dd.open .ai-revise-menu { display: block; }
+    .ai-revise-dd .ai-revise-menu button {
+      display: flex; align-items: center; gap: 8px; width: 100%;
+      background: none; border: none; padding: 8px 12px;
+      font-size: 13px; color: var(--text); cursor: pointer; text-align: left;
+    }
+    .ai-revise-dd .ai-revise-menu button:hover { background: #f3f4f6; }
+    .ai-revise-dd .ai-revise-menu button .act-icon { color: #8b5cf6; width: 14px; height: 14px; }
+    .ai-revise-dd .ai-revise-menu button .act-hint {
+      margin-left: auto; font-size: 10px; color: var(--text-secondary);
+    }
+
+    .ai-page-body {
+      font-size: 13px; color: var(--text-secondary); line-height: 1.7;
+      white-space: pre-wrap; word-break: break-word;
+      max-height: 240px; overflow: auto;
+      padding: 8px 10px; background: #fff; border: 1px dashed var(--border); border-radius: 4px;
+    }
+    .ai-page-body .placeholder { font-style: italic; color: #9ca3af; }
+
+    .ai-page-actions-row {
+      display: flex; align-items: center; gap: 10px; margin-top: 8px;
+      font-size: 11px; color: var(--text-secondary);
+    }
+    .ai-page-actions-row .revise-status {
+      display: none;
+      padding: 2px 8px; border-radius: 10px;
+      background: #eef2ff; color: #4338ca; font-weight: 500;
+    }
+    .ai-page-actions-row .revise-status.show { display: inline-flex; align-items: center; gap: 4px; }
+
+    /* ============================================================
+       模板面板（右栏 / 底部）
+       ============================================================ */
+    .tpl-grid {
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .tpl-card {
+      border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+      background: #fff; cursor: pointer; transition: all 0.15s;
+      text-align: left;
+    }
+    .tpl-card:hover { border-color: #c7d2fe; background: #fafbff; }
+    .tpl-card.active {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 2px #c7d2fe inset;
+      background: #eef2ff;
+    }
+    .tpl-card .tpl-thumb {
+      width: 100%; height: 60px; border-radius: 5px; margin-bottom: 8px;
+      overflow: hidden; position: relative;
+    }
+    .tpl-card .tpl-name {
+      font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px;
+    }
+    .tpl-card .tpl-desc {
+      font-size: 11px; color: var(--text-secondary); line-height: 1.5;
+    }
+    .tpl-card .tpl-active-badge {
+      display: none;
+      margin-top: 6px;
+      font-size: 10px; font-weight: 600;
+      color: #4338ca;
+    }
+    .tpl-card.active .tpl-active-badge { display: inline-block; }
+    .tpl-actions {
+      display: flex; gap: 8px; margin-top: 14px;
+    }
+
+    /* ============================================================
+       Confirm modal（整本重生成）
+       ============================================================ */
+    .confirm-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+      display: none; align-items: center; justify-content: center; z-index: 100;
+    }
+    .confirm-overlay.show { display: flex; }
+    .confirm-modal {
+      background: #fff; border-radius: 8px; width: 420px; max-width: 92vw;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+      overflow: hidden;
+    }
+    .confirm-modal .confirm-head {
+      padding: 14px 18px; font-size: 14px; font-weight: 600;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .confirm-modal .confirm-body { padding: 18px; font-size: 13px; line-height: 1.7; color: var(--text); }
+    .confirm-modal .confirm-body .quota-num { font-weight: 700; color: #4338ca; font-size: 18px; }
+    .confirm-modal .confirm-body .quota-warn {
+      margin-top: 10px; padding: 8px 10px; background: #fff7ed;
+      border: 1px solid #fed7aa; color: #9a3412;
+      border-radius: 5px; font-size: 12px; line-height: 1.6;
+    }
+    .confirm-modal .confirm-actions {
+      padding: 12px 18px;
+      display: flex; justify-content: flex-end; gap: 8px;
+      border-top: 1px solid var(--border); background: #fafafa;
+    }
+
+    /* 只 owner 提示块 */
+    .ai-blocked {
+      background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;
+      padding: 16px 20px; border-radius: 8px; font-size: 13px; line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+  <script>MAG_AUTH.requireAuth();</script>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar">
+        <a href="/admin/magazine/list.html" class="btn btn-secondary btn-sm" style="margin-right:12px">← 返回列表</a>
+        <h1 class="page-title">杂志编辑</h1>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button>
+      </header>
+      <div class="content-area">
+
+        <!-- 顶部说明 -->
+        <div class="ai-hero">
+          <h2>🪄 AI 改稿 + 换模板</h2>
+          <p>
+            选一本已生成的杂志，对每页做 4 种 AI 改稿（<b>重写 / 润色 / 扩写 / 缩短</b>），或者点「整本重新生成」让 LLM 基于原主题重写全部页。
+            右栏「换模板」可挑 3 套样板（<b>商务深蓝 / 教育暖橙 / 极简黑白</b>），点击即时预览。
+          </p>
+          <div class="hero-badges">
+            <span class="hero-badge">仅 owner 可用</span>
+            <span class="hero-badge">v6.3</span>
+            <span class="hero-badge">每页改稿 = 1 次配额</span>
+            <span class="hero-badge">整本 = pages.length 次</span>
+          </div>
+        </div>
+
+        <!-- 权限不足 -->
+        <div id="blockedArea" class="ai-blocked" style="display:none">
+          <b>权限不足。</b> 杂志编辑页仅 <b>owner</b> 角色可用。请联系你的租户 owner 升级权限，或换 owner 账号登录。
+        </div>
+
+        <!-- 主交互区 -->
+        <div id="mainArea">
+          <!-- 错误条 -->
+          <div id="errorBar" class="ai-error-bar" role="alert">
+            <button type="button" class="ai-error-close" aria-label="关闭">×</button>
+            <span id="errorBarText"></span>
+          </div>
+
+          <!-- 杂志选择 + 整本按钮 -->
+          <div class="mag-toolbar">
+            <div class="mag-title">
+              <i data-lucide="book-open" style="width:18px;height:18px;color:var(--primary)"></i>
+              <span class="mag-name" id="magName">— 加载中 —</span>
+              <span class="mag-pill" id="magPill" style="display:none">未选模板</span>
+            </div>
+            <select id="magSelect" aria-label="切换杂志">
+              <option value="">— 加载杂志列表 —</option>
+            </select>
+            <button type="button" id="reviseAllBtn" class="btn btn-primary" disabled>
+              <i data-lucide="refresh-cw" style="width:14px;height:14px"></i>
+              整本重新生成
+            </button>
+          </div>
+
+          <!-- 2 列布局 -->
+          <div class="ai-edit-layout">
+            <!-- 左：pages 列表 -->
+            <div>
+              <div class="ai-card" style="margin-bottom:0">
+                <div class="ai-card-title">
+                  <i data-lucide="layout-list" style="width:18px;height:18px;color:var(--primary)"></i>
+                  页面列表
+                  <span style="margin-left:auto;font-size:12px;color:var(--text-secondary);font-weight:400">
+                    共 <span id="pageCount">0</span> 页 · 每页独立改稿
+                  </span>
+                </div>
+                <div class="ai-card-hint">
+                  AI 返回的标题/正文统一用 <code>textContent</code> 渲染，不走 <code>innerHTML</code> —— 防御 XSS。
+                </div>
+                <ul class="ai-pages" id="pagesList"></ul>
+                <div id="pagesEmpty" class="ai-card-hint" style="text-align:center;padding:30px 0;color:#9ca3af;display:none">
+                  这本杂志还没有页面（先去 AI 一句话生成或 PDF 上传）
+                </div>
+              </div>
+            </div>
+
+            <!-- 右：换模板面板 -->
+            <div>
+              <div class="ai-card" style="margin-bottom:0">
+                <div class="ai-card-title">
+                  <i data-lucide="palette" style="width:18px;height:18px;color:var(--primary)"></i>
+                  换模板
+                </div>
+                <div class="ai-card-hint">
+                  挑一套样板 → 立即注入 CSS 变量（<code>:root</code>）+ 给 <code>&lt;body&gt;</code> 加 element classes。
+                  模板仅样式预设，不改 page 字段。
+                </div>
+                <div class="tpl-grid" id="tplGrid">
+                  <div style="text-align:center;color:#9ca3af;padding:14px;font-size:12px">加载模板中…</div>
+                </div>
+                <div class="tpl-actions">
+                  <button type="button" id="resetTplBtn" class="btn btn-secondary btn-sm" style="flex:1" disabled>
+                    <i data-lucide="rotate-ccw" style="width:12px;height:12px"></i>
+                    恢复默认
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Confirm modal：整本重新生成 -->
+  <div class="confirm-overlay" id="reviseAllModal" role="dialog" aria-modal="true">
+    <div class="confirm-modal">
+      <div class="confirm-head">
+        <i data-lucide="alert-triangle" style="width:16px;height:16px"></i>
+        整本重新生成
+      </div>
+      <div class="confirm-body">
+        <p>
+          当前杂志共 <span class="quota-num" id="reviseAllPages">0</span> 页。
+        </p>
+        <p>
+          这次操作将消耗 <span class="quota-num" id="reviseAllQuota">0</span> 次 AI 配额
+          （每页算 1 次），按当前限速策略约 <b id="reviseAllCooldown">—</b> 可恢复。
+        </p>
+        <div class="quota-warn">
+          ⚠️ 整本会基于「原 prompt 主题 + 已编辑页 context」重新生成。已编辑内容会被尊重（不强行覆盖），但表达可能会变。建议改稿前先备份。
+        </div>
+      </div>
+      <div class="confirm-actions">
+        <button type="button" id="reviseAllCancel" class="btn btn-secondary btn-sm">取消</button>
+        <button type="button" id="reviseAllConfirm" class="btn btn-primary btn-sm">
+          <i data-lucide="refresh-cw" style="width:12px;height:12px"></i>
+          确认整本重新生成
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/admin/js/api.js?v=3"></script>
+  <script>
+    // ============================================================
+    // 1) 角色 + 上下文
+    // ============================================================
+    var __ctx = null;
+    var __isOwner = false;
+    var __magazines = [];      // 全部杂志（owner 自己的）
+    var __currentMag = null;   // 当前选中的 magazine {id, name, description, template_id, ...}
+    var __currentPages = [];   // 当前 magazine 的 pages 数组
+    var __templates = [];      // 3 套模板
+    var __currentTemplate = null;  // {id, name} 或 null
+    var __editingAllActions = null;  // 整本确认中缓存的 perPageActions
+
+    var REVISE_ACTIONS = [
+      { key: 'rewrite',  label: '重写',  hint: '换一种叙述角度', icon: 'rotate-cw' },
+      { key: 'polish',   label: '润色',  hint: '提升文字流畅度', icon: 'sparkles' },
+      { key: 'expand',   label: '扩写',  hint: '增加细节/例子',  icon: 'plus-circle' },
+      { key: 'shorten',  label: '缩短',  hint: '削减冗余',        icon: 'minus-circle' }
+    ];
+
+    // ============================================================
+    // 2) nav 渲染 + owner 门禁
+    // ============================================================
+    MAG_NAV.render('magazine-edit').then(function (ctx) {
+      __ctx = ctx;
+      var u = ctx && ctx.user;
+      __isOwner = !!(u && u.role === 'owner');
+      if (!__isOwner) {
+        document.getElementById('mainArea').style.display = 'none';
+        document.getElementById('blockedArea').style.display = '';
+        return;
+      }
+      bootOwner();
+    });
+
+    function bootOwner() {
+      // 先列模板，再列杂志（模板是常量，几乎瞬返）
+      api.listTemplates().then(function (rows) {
+        __templates = rows || [];
+        renderTemplateGrid();
+        return loadMagazineList();
+      }).then(function () {
+        // 从 URL ?id=&focus= 自动选（list.html 跳过来带 id）
+        var params = new URLSearchParams(location.search);
+        var idParam = params.get('id');
+        if (idParam) {
+          var sel = document.getElementById('magSelect');
+          if (sel) {
+            sel.value = String(idParam);
+            onMagSelectChange();
+          }
+        }
+      }).catch(function (e) {
+        showError('初始化失败：' + (e && e.message ? e.message : 'unknown'));
+      });
+    }
+
+    // ============================================================
+    // 3) 杂志列表 + 切换
+    // ============================================================
+    function loadMagazineList() {
+      return api.get('/magazines').then(function (rows) {
+        __magazines = rows || [];
+        var sel = document.getElementById('magSelect');
+        sel.textContent = '';
+        if (__magazines.length === 0) {
+          var opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = '— 暂无杂志 —';
+          sel.appendChild(opt);
+          sel.disabled = true;
+          return null;
+        }
+        __magazines.forEach(function (m) {
+          var opt = document.createElement('option');
+          opt.value = String(m.id);
+          opt.textContent = '#' + m.id + ' · ' + (m.name || '(未命名)');
+          sel.appendChild(opt);
+        });
+        sel.disabled = false;
+        sel.onchange = onMagSelectChange;
+        return null;
+      });
+    }
+
+    function onMagSelectChange() {
+      var id = Number(document.getElementById('magSelect').value);
+      if (!id) {
+        __currentMag = null;
+        __currentPages = [];
+        document.getElementById('magName').textContent = '— 请选择杂志 —';
+        document.getElementById('magPill').style.display = 'none';
+        document.getElementById('reviseAllBtn').disabled = true;
+        document.getElementById('resetTplBtn').disabled = true;
+        renderPages();
+        applyTemplate(null);
+        return;
+      }
+      loadMagazine(id);
+    }
+
+    function loadMagazine(id) {
+      return api.get('/magazines/' + id).then(function (m) {
+        __currentMag = m;
+        __currentPages = Array.isArray(m.pages) ? m.pages : [];
+        // 顶部
+        document.getElementById('magName').textContent = m.name || '(未命名)';
+        var pill = document.getElementById('magPill');
+        if (m.template_id) {
+          pill.textContent = '模板 · ' + m.template_id;
+          pill.style.display = '';
+        } else {
+          pill.textContent = '未选模板';
+          pill.style.display = '';
+        }
+        document.getElementById('reviseAllBtn').disabled = __currentPages.length === 0;
+        // pages 渲染
+        renderPages();
+        // 模板状态
+        highlightTemplate(m.template_id || null);
+        // 拉一次 preview 让 css 变量到位（保持视觉一致）
+        return loadAndApplyPreview(id);
+      }).catch(function (e) {
+        showError('加载杂志失败：' + (e && e.message ? e.message : 'unknown'));
+      });
+    }
+
+    // ============================================================
+    // 4) Pages 渲染 + 每页 AI 改稿下拉
+    // ============================================================
+    function renderPages() {
+      var ul = document.getElementById('pagesList');
+      ul.textContent = '';
+      var empty = document.getElementById('pagesEmpty');
+      if (__currentPages.length === 0) {
+        empty.style.display = '';
+        document.getElementById('pageCount').textContent = '0';
+        return;
+      }
+      empty.style.display = 'none';
+      document.getElementById('pageCount').textContent = String(__currentPages.length);
+
+      __currentPages.forEach(function (p, idx) {
+        var li = document.createElement('li');
+        li.className = 'ai-page';
+        li.setAttribute('data-page-index', String(idx));
+
+        // 头部：编号 + 标题 + 下拉
+        var head = document.createElement('div');
+        head.className = 'ai-page-head';
+
+        var num = document.createElement('span');
+        num.className = 'ai-page-num';
+        num.textContent = String(idx + 1);
+        head.appendChild(num);
+
+        var titleEl = document.createElement('div');
+        titleEl.className = 'ai-page-title-text';
+        titleEl.setAttribute('data-role', 'title');
+        if (p.title && String(p.title).trim()) {
+          titleEl.textContent = String(p.title);
+        } else {
+          var ph = document.createElement('span');
+          ph.className = 'placeholder';
+          ph.textContent = '（无标题）';
+          titleEl.appendChild(ph);
+        }
+        head.appendChild(titleEl);
+
+        // 下拉
+        var dd = buildReviseDropdown(idx);
+        head.appendChild(dd);
+
+        li.appendChild(head);
+
+        // body
+        var bodyEl = document.createElement('div');
+        bodyEl.className = 'ai-page-body';
+        bodyEl.setAttribute('data-role', 'body');
+        if (p.body && String(p.body).trim()) {
+          // XSS 防御：直接 textContent
+          bodyEl.textContent = String(p.body);
+        } else {
+          var bph = document.createElement('span');
+          bph.className = 'placeholder';
+          bph.textContent = '（无正文）';
+          bodyEl.appendChild(bph);
+        }
+        li.appendChild(bodyEl);
+
+        // 状态行
+        var statusRow = document.createElement('div');
+        statusRow.className = 'ai-page-actions-row';
+        var status = document.createElement('span');
+        status.className = 'revise-status';
+        status.setAttribute('data-role', 'status');
+        statusRow.appendChild(status);
+        // 角标：上次改稿时间
+        var meta = document.createElement('span');
+        meta.textContent = p.updated_at ? ('上次更新：' + p.updated_at.slice(0, 16).replace('T', ' ')) : '尚未改稿';
+        statusRow.appendChild(meta);
+        li.appendChild(statusRow);
+
+        ul.appendChild(li);
+      });
+
+      if (window.lucide && window.lucide.createIcons) {
+        try { window.lucide.createIcons({ nameAttr: 'data-lucide' }); } catch (_) {}
+      }
+    }
+
+    function buildReviseDropdown(pageIndex) {
+      var dd = document.createElement('div');
+      dd.className = 'ai-revise-dd';
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ai-revise-btn';
+      btn.textContent = '';
+      var ico1 = document.createElement('i');
+      ico1.setAttribute('data-lucide', 'sparkles');
+      ico1.style.cssText = 'width:12px;height:12px';
+      btn.appendChild(ico1);
+      btn.appendChild(document.createTextNode('AI 改稿 '));
+      var ico2 = document.createElement('i');
+      ico2.setAttribute('data-lucide', 'chevron-down');
+      ico2.style.cssText = 'width:12px;height:12px;margin-left:2px';
+      btn.appendChild(ico2);
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        // 关闭其它下拉
+        document.querySelectorAll('.ai-revise-dd.open').forEach(function (el) {
+          if (el !== dd) el.classList.remove('open');
+        });
+        dd.classList.toggle('open');
+      });
+      dd.appendChild(btn);
+
+      var menu = document.createElement('div');
+      menu.className = 'ai-revise-menu';
+      REVISE_ACTIONS.forEach(function (act) {
+        var item = document.createElement('button');
+        item.type = 'button';
+        // XSS 防御：所有元素 createElement + textContent（act.* 是前端常量，但走 DOM API 永远更稳）
+        var iconEl = document.createElement('i');
+        iconEl.setAttribute('data-lucide', act.icon);
+        iconEl.className = 'act-icon';
+        item.appendChild(iconEl);
+        var labelEl = document.createElement('span');
+        labelEl.textContent = act.label;
+        item.appendChild(labelEl);
+        var hintEl = document.createElement('span');
+        hintEl.className = 'act-hint';
+        hintEl.textContent = act.hint;
+        item.appendChild(hintEl);
+        item.addEventListener('click', function () {
+          dd.classList.remove('open');
+          onRevisePage(pageIndex, act.key);
+        });
+        menu.appendChild(item);
+      });
+      dd.appendChild(menu);
+
+      // 点外面关掉
+      document.addEventListener('click', function (e) {
+        if (!dd.contains(e.target)) dd.classList.remove('open');
+      });
+
+      return dd;
+    }
+
+    // ============================================================
+    // 5) 单页 AI 改稿（XHR 调用 api.revisePage）
+    // ============================================================
+    function onRevisePage(pageIndex, action) {
+      if (!__currentMag) {
+        showError('请先选择杂志');
+        return;
+      }
+      var li = document.querySelector('.ai-page[data-page-index="' + pageIndex + '"]');
+      if (!li) return;
+      var statusEl = li.querySelector('[data-role="status"]');
+      var btn = li.querySelector('.ai-revise-btn');
+
+      // 行内进入 busy 态
+      li.classList.add('busy');
+      btn.disabled = true;
+      statusEl.classList.add('show');
+      statusEl.textContent = '';
+      var busySpinner = document.createElement('span');
+      busySpinner.className = 'ai-spinner dark';
+      statusEl.appendChild(busySpinner);
+      statusEl.appendChild(document.createTextNode('改稿中…'));
+      clearError();
+
+      api.revisePage(__currentMag.id, pageIndex, action).then(function (resp) {
+        // 实时替换 title + body（XSS 防御：textContent）
+        var newPage = resp && resp.page ? resp.page : resp;
+        if (newPage && (newPage.title != null || newPage.body != null)) {
+          var titleEl = li.querySelector('[data-role="title"]');
+          titleEl.textContent = '';  // 清空 placeholder
+          if (newPage.title && String(newPage.title).trim()) {
+            titleEl.textContent = String(newPage.title);
+          } else {
+            var ph = document.createElement('span');
+            ph.className = 'placeholder';
+            ph.textContent = '（无标题）';
+            titleEl.appendChild(ph);
+          }
+          var bodyEl = li.querySelector('[data-role="body"]');
+          bodyEl.textContent = '';
+          if (newPage.body && String(newPage.body).trim()) {
+            // XSS 防御：直接 textContent，浏览器不会解析 HTML
+            bodyEl.textContent = String(newPage.body);
+          } else {
+            var bph = document.createElement('span');
+            bph.className = 'placeholder';
+            bph.textContent = '（无正文）';
+            bodyEl.appendChild(bph);
+          }
+          // 更新本地缓存
+          __currentPages[pageIndex] = Object.assign({}, __currentPages[pageIndex], {
+            title: newPage.title || '',
+            body:  newPage.body  || '',
+            updated_at: new Date().toISOString()
+          });
+          var actionLabel = (REVISE_ACTIONS.find(function (a) { return a.key === action; }) || {}).label || action;
+          // XSS 防御：纯静态文本，textContent 即可（不需要 spinner 或图标）
+          statusEl.textContent = '✓ ' + actionLabel + ' 完成 · ' + new Date().toLocaleTimeString();
+        } else {
+          statusEl.textContent = '⚠️ 改稿返回异常';
+        }
+        toast('第 ' + (pageIndex + 1) + ' 页已' + ((REVISE_ACTIONS.find(function (a) { return a.key === action; }) || {}).label || '') + '完成', 'success');
+      }).catch(function (err) {
+        handleApiError(err, '改稿失败');
+        statusEl.textContent = '⚠️ 改稿失败';
+      }).then(function () {
+        li.classList.remove('busy');
+        btn.disabled = false;
+        if (window.lucide && window.lucide.createIcons) {
+          try { window.lucide.createIcons({ nameAttr: 'data-lucide' }); } catch (_) {}
+        }
+      });
+    }
+
+    // ============================================================
+    // 6) 整本重新生成（confirm modal → api.reviseAll）
+    // ============================================================
+    document.getElementById('reviseAllBtn').addEventListener('click', function () {
+      if (!__currentMag || __currentPages.length === 0) {
+        showError('当前杂志没有页面可整本重新生成');
+        return;
+      }
+      // 默认每页 = polish（保守选择，不大幅改写）
+      __editingAllActions = __currentPages.map(function () { return 'polish'; });
+      var n = __currentPages.length;
+      document.getElementById('reviseAllPages').textContent = String(n);
+      document.getElementById('reviseAllQuota').textContent = String(n);
+      // 限速恢复时间（v6.1 默认 20/天；简化为「今日剩余配额」文字）
+      document.getElementById('reviseAllCooldown').textContent = '明日 00:00 重置';
+      document.getElementById('reviseAllModal').classList.add('show');
+    });
+    document.getElementById('reviseAllCancel').addEventListener('click', function () {
+      document.getElementById('reviseAllModal').classList.remove('show');
+      __editingAllActions = null;
+    });
+    document.getElementById('reviseAllConfirm').addEventListener('click', function () {
+      if (!__editingAllActions || !__currentMag) return;
+      var btn = document.getElementById('reviseAllConfirm');
+      btn.disabled = true;
+      btn.textContent = '';
+      var s = document.createElement('span');
+      s.className = 'ai-spinner';
+      btn.appendChild(s);
+      btn.appendChild(document.createTextNode('处理中…'));
+      api.reviseAll(__currentMag.id, __editingAllActions).then(function (resp) {
+        var pages = (resp && resp.pages) || [];
+        // 实时替换所有页
+        pages.forEach(function (newP, i) {
+          var li = document.querySelector('.ai-page[data-page-index="' + i + '"]');
+          if (!li) return;
+          var titleEl = li.querySelector('[data-role="title"]');
+          titleEl.textContent = String(newP.title || '');
+          var bodyEl = li.querySelector('[data-role="body"]');
+          bodyEl.textContent = String(newP.body || '');
+          var statusEl = li.querySelector('[data-role="status"]');
+          statusEl.classList.add('show');
+          statusEl.textContent = '✓ 整本完成 · ' + new Date().toLocaleTimeString();
+          // 更新本地缓存
+          if (__currentPages[i]) {
+            __currentPages[i] = Object.assign({}, __currentPages[i], {
+              title: newP.title || '',
+              body:  newP.body  || '',
+              updated_at: new Date().toISOString()
+            });
+          }
+        });
+        toast('整本重新生成完成 · 共 ' + pages.length + ' 页', 'success');
+        document.getElementById('reviseAllModal').classList.remove('show');
+      }).catch(function (err) {
+        handleApiError(err, '整本重新生成失败');
+      }).then(function () {
+        btn.disabled = false;
+        btn.textContent = '';
+        var ico = document.createElement('i');
+        ico.setAttribute('data-lucide', 'refresh-cw');
+        ico.style.cssText = 'width:12px;height:12px';
+        btn.appendChild(ico);
+        btn.appendChild(document.createTextNode('确认整本重新生成'));
+        if (window.lucide && window.lucide.createIcons) {
+          try { window.lucide.createIcons({ nameAttr: 'data-lucide' }); } catch (_) {}
+        }
+      });
+    });
+
+    // ============================================================
+    // 7) 换模板面板：3 套样板卡片 + 恢复默认
+    // ============================================================
+    function renderTemplateGrid() {
+      var grid = document.getElementById('tplGrid');
+      grid.textContent = '';
+      __templates.forEach(function (t) {
+        var card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'tpl-card';
+        card.setAttribute('data-tpl-id', t.id);
+
+        // 缩略图（SVG/CSS 模拟）—— 4 属性都有用：主色 + 分隔线 + 卡片样式
+        // XSS 防御：所有子元素 createElement + setProperty 注入，colors 是受控的后端常量但仍走 style 属性最稳
+        var thumb = document.createElement('div');
+        thumb.className = 'tpl-thumb';
+        thumb.style.background = (t.colors && t.colors.bg) || '#fff';
+        thumb.style.borderTop = '4px solid ' + ((t.colors && t.colors.primary) || '#999');
+        // 用 5 个 createElement 子 div 模拟缩略内容（不拼字符串）
+        var bar = document.createElement('div');
+        bar.style.cssText = 'position:absolute;top:8px;left:8px;right:8px;height:6px;border-radius:2px;background:' + ((t.colors && t.colors.primary) || '#999');
+        thumb.appendChild(bar);
+        var line1 = document.createElement('div');
+        line1.style.cssText = 'position:absolute;top:20px;left:8px;width:60%;height:3px;background:#d1d5db;border-radius:1px';
+        thumb.appendChild(line1);
+        var line2 = document.createElement('div');
+        line2.style.cssText = 'position:absolute;top:28px;left:8px;width:80%;height:3px;background:#d1d5db;border-radius:1px';
+        thumb.appendChild(line2);
+        var line3 = document.createElement('div');
+        line3.style.cssText = 'position:absolute;top:36px;left:8px;width:40%;height:3px;background:#e5e7eb;border-radius:1px';
+        thumb.appendChild(line3);
+        var block = document.createElement('div');
+        var blockRadius = (t.elements && t.elements.card === 'rounded') ? '3px' : '1px';
+        block.style.cssText = 'position:absolute;top:46px;left:8px;width:24px;height:6px;border-radius:' + blockRadius + ';background:' + ((t.colors && t.colors.accent) || '#fbbf24');
+        thumb.appendChild(block);
+        card.appendChild(thumb);
+
+        var name = document.createElement('div');
+        name.className = 'tpl-name';
+        name.textContent = t.name || t.id;
+        card.appendChild(name);
+
+        var desc = document.createElement('div');
+        desc.className = 'tpl-desc';
+        desc.textContent = t.description || '';
+        card.appendChild(desc);
+
+        var badge = document.createElement('div');
+        badge.className = 'tpl-active-badge';
+        badge.textContent = '✓ 当前使用';
+        card.appendChild(badge);
+
+        card.addEventListener('click', function () {
+          if (!__currentMag) {
+            showError('请先选择杂志');
+            return;
+          }
+          onSelectTemplate(t.id);
+        });
+        grid.appendChild(card);
+      });
+    }
+
+    function highlightTemplate(activeId) {
+      __currentTemplate = activeId ? { id: activeId } : null;
+      document.querySelectorAll('.tpl-card').forEach(function (c) {
+        c.classList.toggle('active', c.getAttribute('data-tpl-id') === activeId);
+      });
+      var resetBtn = document.getElementById('resetTplBtn');
+      resetBtn.disabled = !__currentMag || !activeId;
+      // 同步 pill
+      var pill = document.getElementById('magPill');
+      if (!__currentMag) {
+        pill.style.display = 'none';
+      } else if (activeId) {
+        pill.textContent = '模板 · ' + activeId;
+        pill.style.display = '';
+      } else {
+        pill.textContent = '未选模板';
+        pill.style.display = '';
+      }
+    }
+
+    function onSelectTemplate(tplId) {
+      if (!__currentMag) return;
+      var btn = document.querySelector('.tpl-card[data-tpl-id="' + tplId + '"]');
+      // 乐观高亮 + 拉 preview
+      api.setTemplate(__currentMag.id, tplId).then(function () {
+        // 后端写完立刻拉 preview 应用 CSS
+        return loadAndApplyPreview(__currentMag.id);
+      }).then(function () {
+        highlightTemplate(tplId);
+        toast('已切换到模板：' + tplId, 'success');
+      }).catch(function (err) {
+        handleApiError(err, '切换模板失败');
+      });
+    }
+
+    document.getElementById('resetTplBtn').addEventListener('click', function () {
+      if (!__currentMag) return;
+      api.setTemplate(__currentMag.id, null).then(function () {
+        return loadAndApplyPreview(__currentMag.id);
+      }).then(function () {
+        highlightTemplate(null);
+        toast('已恢复默认模板', 'success');
+      }).catch(function (err) {
+        handleApiError(err, '恢复模板失败');
+      });
+    });
+
+    function loadAndApplyPreview(magId) {
+      return api.getTemplatePreview(magId).then(function (resp) {
+        applyTemplate(resp);
+      }).catch(function (err) {
+        // preview 拉失败不阻断主流程（编辑器仍可用，只是没样式预览）
+        console.warn('[ai-edit] load preview failed', err);
+        applyTemplate(null);
+      });
+    }
+
+    // ============================================================
+    // 8) CSS 变量 + element classes 注入
+    //    - css_vars → document.documentElement.style.setProperty(k, v)
+    //    - element_classes → document.body.classList（先清旧 tpl- 前缀再补新的）
+    // ============================================================
+    function applyTemplate(resp) {
+      var root = document.documentElement;
+      var body = document.body;
+
+      // 1) 清掉旧的 template css 变量（按 --template- 前缀）
+      //    getPropertyValue 拿不到时不报错；我们用一组固定 key 列表清空
+      var knownKeys = [
+        '--template-color-primary','--template-color-accent','--template-color-bg','--template-color-text',
+        '--template-font-heading','--template-font-body',
+        '--template-layout-cover-style','--template-layout-footer-style',
+        '--template-element-icon-set','--template-element-divider','--template-element-card'
+      ];
+      knownKeys.forEach(function (k) { root.style.removeProperty(k); });
+
+      // 2) 清掉旧的 tpl- 前缀 class（保留其它 class）
+      var keep = [];
+      body.classList.forEach(function (c) {
+        if (c.indexOf('tpl-') !== 0) keep.push(c);
+      });
+      body.className = keep.join(' ');
+
+      // 3) 应用新值
+      if (!resp) return;
+      if (resp.css_vars) {
+        Object.keys(resp.css_vars).forEach(function (k) {
+          var v = resp.css_vars[k];
+          if (typeof v === 'string') root.style.setProperty(k, v);
+        });
+      }
+      if (resp.element_classes) {
+        Object.keys(resp.element_classes).forEach(function (k) {
+          var cls = resp.element_classes[k];
+          if (typeof cls === 'string' && cls) body.classList.add(cls);
+        });
+      }
+    }
+
+    // ============================================================
+    // 9) 错误条 + 错误分支（401/403/422/404/429/500/0）
+    // ============================================================
+    var errorBar = document.getElementById('errorBar');
+    var errorBarText = document.getElementById('errorBarText');
+    document.querySelector('.ai-error-close').addEventListener('click', function () {
+      errorBar.classList.remove('show');
+    });
+    function showError(msg, warn) {
+      errorBarText.textContent = msg;
+      errorBar.classList.toggle('warn', !!warn);
+      errorBar.classList.add('show');
+      errorBar.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    function clearError() { errorBar.classList.remove('show'); }
+
+    function handleApiError(err, prefix) {
+      var msg = (err && err.message) ? String(err.message) : (prefix || '请求失败');
+      var status = err && err.status;
+      if (status === 401 || /401|未登录|unauthor/i.test(msg)) {
+        showError(prefix + '：登录已失效（' + msg + '）', true);
+        toast('登录已失效', 'error');
+        setTimeout(function () { location.href = '/admin/login.html'; }, 1500);
+        return;
+      }
+      if (status === 403 || /403|仅 owner|forbid/i.test(msg)) {
+        showError(prefix + '：权限不足（' + msg + '）', true);
+        toast('仅 owner 可用', 'error');
+        return;
+      }
+      if (status === 404 || /404|not.found|未找/i.test(msg)) {
+        showError(prefix + '：资源不存在（' + msg + '）', true);
+        toast('资源不存在', 'error');
+        return;
+      }
+      if (status === 422 || /422|invalid|参数|枚举/i.test(msg)) {
+        showError(prefix + '：参数错误（' + msg + '）', true);
+        toast('参数错误', 'error');
+        return;
+      }
+      if (status === 429 || /429|rate|限速|quota/i.test(msg)) {
+        showError(prefix + '：触发限速（' + msg + '）· 明天 00:00 重置', true);
+        toast('AI 限速触发', 'error');
+        return;
+      }
+      if (status === 0 || status === -1) {
+        showError(prefix + '：网络错误，请检查连接后重试');
+        toast('网络错误', 'error');
+        return;
+      }
+      // 500 及其它
+      showError(prefix + '（HTTP ' + (status || '?') + '）：' + msg);
+      toast('服务异常', 'error');
+    }
+
+    // ============================================================
+    // 10) Lucide 图标补渲染
+    // ============================================================
+    if (window.lucide && window.lucide.createIcons) {
+      try { window.lucide.createIcons({ nameAttr: 'data-lucide' }); } catch (_) {}
+    }
+  </script>
+</body>
+</html>

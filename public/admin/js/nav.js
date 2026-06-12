@@ -23,6 +23,7 @@
     { key: 'ai-pdf',        icon: 'file-text',        label: 'AI PDF 一键生成', href: '/admin/ai-pdf.html', role: 'owner' },
     { key: 'ai-stats',      icon: 'bar-chart-3',      label: 'AI 调用大屏', href: '/admin/ai-stats.html' },
     { key: 'magazine',      icon: 'book-open',        label: '杂志管理',     href: '/admin/magazine/list.html' },
+    { key: 'magazine-edit', icon: 'edit',             label: '杂志编辑',     href: '/admin/magazine/ai-edit.html', role: 'owner' },
     { key: 'cover',         icon: 'image',            label: '封面管理',     href: '/admin/cover/list.html' },
     { key: 'branding',      icon: 'palette',          label: '品牌定制',   href: '/admin/branding.html' },
     { key: 'analytics',     icon: 'bar-chart-3',      label: '阅读分析',   href: '/admin/analytics.html' },
