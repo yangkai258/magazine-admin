@@ -353,3 +353,375 @@ link 格式：`http://<hostname>:50100/?t=<slug>&s=<secret>`
 - v4 → v5（`server/db/init.js` 升 `_meta.schema_version` 5 + `loadData` 自动 backfill reader_secret）
 - 老租户缺 `reader_secret` → 自动生成 32 字符 base64url + 立即持久化
 - 已跑过，无需人工迁移
+
+---
+
+## v6.0 增量 — AI 一句话生成画册骨架
+
+### 范围
+
+**做**：owner 在后台输入一句中文描述（1–2000 字），后端调 MiniMax M3 生成结构化画册骨架（页标题 + 100–300 字正稿），写入 data.json 作为一条新 magazine（`enabled=0`，待用户后续手动配图 + 发布）。
+
+**不做**（明确砍掉）：
+- ❌ AI 选模板（模板中心是 v6.2 路线）
+- ❌ AI 配图 / 文生图（本期只产 text 骨架，不带图）
+- ❌ AI 编辑已有杂志（无 `PATCH /ai/edit`）
+- ❌ AI 翻译（locale 仅作为 prompt 提示词，不真正切换输出语言风格以外的产物）
+- ❌ 限速（每租户 N 次/天）—— 本期未做，v6.1 加
+
+### MiniMax M3 接入规范
+
+**环境变量**：
+```
+MINIMAX_API_KEY=<32+ 字符>          # 必填；缺失时 500 + 明确错误
+MINIMAX_BASE_URL=https://api.minimax.chat/v1   # 默认；可指向 mock / proxy
+MINIMAX_MODEL=MiniMax-M3             # 默认；本期锁死 M3，不做模型选择 UI
+```
+
+**调用封装**：`server/ai-client.js` 导出 `generateMagazineSkeleton({ title, prompt, pageCount, locale })`。
+
+**System Prompt 强约束 JSON Schema**（通过 system prompt + response_format=json_object 双约束）：
+```json
+{
+  "name": "string, ≤ 80 字，画册标题",
+  "description": "string, ≤ 200 字，一行描述",
+  "pages": [
+    { "page_order": 1, "title": "string, ≤ 30 字", "body": "string, 100–300 字 markdown 风格正稿" }
+  ]
+}
+```
+
+`pages.length` 必须等于 `pageCount`；任意字段缺失 / 类型错 → 抛 `AiParseError`。
+
+**Retry 策略**：退避重试 5s → 15s → 30s，最多 3 次；触发重试的场景：
+- HTTP 5xx（502/503/504/529）
+- HTTP 429（rate limit）
+- JSON parse 失败（视为 LLM 输出漂移，重试可能拿到合规结果）
+- 网络超时（fetch 30s）
+
+非 5xx / 非 429 的 4xx（除 408）→ 立即抛错，不重试。
+
+**Logging**：调用开始 `console.log('[ai] start model=… prompt_chars=…')`；结束 `console.log('[ai] ok duration_ms=… retries=…')`；重试 `console.warn('[ai] retry N reason=…')`；失败 `console.error('[ai] fail err=…')`。**严禁 log `MINIMAX_API_KEY` 或 Authorization header**。
+
+### 新增端点：`POST /api/admin/ai/skeleton`
+
+**Auth**：`auth.requireRole('owner')`（editor / viewer 拒绝 403；未登录 401）。
+
+**Request Body**（JSON，Content-Type: application/json）：
+```json
+{
+  "prompt": "string, 5–2000 字, 必填",
+  "title": "string, ≤ 80 字, 可选, 覆盖 LLM 自动生成的 name",
+  "pageCount": "integer, 3–20, default 6",
+  "locale": "string, 'zh-CN' | 'en-US', default 'zh-CN'"
+}
+```
+
+**200 OK**：
+```json
+{
+  "magazine": { "id": 123, "name": "...", "description": "...", "enabled": 0, "tenant_id": 1, "upload_date": "2026-06-12", "cover_pc": "", "cover_mobile": "" },
+  "pages": [
+    { "id": 456, "page_order": 1, "image_path": "", "title": "...", "body": "...", "is_skeleton": true }
+  ],
+  "llm_meta": { "model": "MiniMax-M3", "duration_ms": 4321, "retries": 0 }
+}
+```
+
+**4xx**：
+- `400`：`prompt` 缺失 / 长度越界 / `pageCount` 越界 / `locale` 不在白名单
+- `401`：未登录
+- `403`：当前角色不是 owner
+- `404`：tenant 不存在（理论上不会发生，防御性写）
+
+**5xx**：
+- `500 MINIMAX_API_KEY not configured`（环境变量缺失）
+- `500 AI_UPSTREAM_ERROR`（LLM 4xx 非重试错；message 透传但不暴露原始 stack）
+- `500 AI_PARSE_ERROR`（3 次重试后仍 JSON parse 失败）
+- `502 AI_UPSTREAM_TIMEOUT`（30s fetch 超时）
+- `503 AI_UPSTREAM_5XX`（重试 3 次后仍 5xx）
+
+> **数据完整性**：LLM 调用成功但落库失败时，已 `createMagazine` 的记录必须删除（避免孤立空壳）。当前实现顺序为 `createMagazine → addPages`，任一步异常即回滚上一条 magazine。
+
+### pages schema 扩展（schema v5 → v6）
+
+**新增字段**（`server/db/init.js` `requiredArrays.pages` 兼容扩展）：
+| 字段 | 类型 | 默认 | 说明 |
+|------|------|------|------|
+| `title` | TEXT | `''` | 页标题（LLM 生成；空字符串兼容 v5 老数据） |
+| `body` | TEXT | `''` | 页正稿 markdown 文本（LLM 生成） |
+| `is_skeleton` | BOOLEAN | `false` | true = AI 骨架页（用户后续可手动上传图替换） |
+
+**`_meta.schema_version`**：5 → **6**。`loadData()` 在 `schema_version < 6` 时对 `pages` 数组 forEach 补默认值（`title ??= ''`、`body ??= ''`、`is_skeleton ??= false`），不破坏既有 v5 magazine。
+
+**Magazine 字段**：本期不动 magazine 既有字段。新建 magazine 时 `enabled` 强制写 0（schema 默认 1，调用层覆盖）；用户后续上传封面 + 改 enabled 后才在公共端可见。
+
+### 新增前端页：`public/admin/ai-generate.html`
+
+**位置**：admin 后台独立页，不嵌入既有 iframe。
+
+**5 个字段**（form 形态）：
+1. `<textarea name="prompt" required minlength=5 maxlength=2000>` —— 主输入，必填
+2. `<input name="title" maxlength=80>` —— 可选，覆盖标题
+3. `<input name="pageCount" type=number min=3 max=20 value=6>` —— 3–20 页，默认 6
+4. `<select name="locale">` —— `zh-CN`（默认）/ `en-US`
+5. 提交按钮 —— 「✨ 生成骨架」
+
+**提交流程**：
+```
+[提交] → 禁用按钮 + spinner
+       → api.aiSkeleton({ prompt, title, pageCount, locale })
+       → 200：渲染 #skeletonOutput（JSON 美化 + pages 列表卡片化）
+            + toast 成功
+            + 「应用到杂志列表」按钮亮起
+       → 401：跳 /admin/login.html
+       → 403：toast「仅 owner 可用」
+       → 4xx/5xx：form 上方红条 + toast 错误（err.message）
+```
+
+**跳转高亮**：成功按钮 `onclick = location.href = '/admin/magazine/list.html?highlight=<magazine.id>'`，list.html 检测 `?highlight=` 参数，对应行加 `.row-highlight` CSS class（3s 黄底淡出）。
+
+**XSS 防护**：LLM 返回的 title / body 渲染**必须**用 `textContent` 或 `Node.textContent = ...`，禁止 `.innerHTML = userInput` / `.innerHTML = llmBody`。不引入 marked / DOMPurify 依赖（保持 zero new deps）。
+
+**入口**：sidebar 在「杂志管理」上方加「✨ AI 一句话生成」链接，href=`/admin/ai-generate.html`，Lucide 图标沿用 `sparkles`。
+
+**API 客户端**：`public/admin/js/api.js` 末尾追加：
+```js
+api.aiSkeleton = ({ prompt, title, pageCount, locale }) =>
+  api.post('/api/admin/ai/skeleton', { prompt, title, pageCount, locale });
+```
+
+### 审计
+
+每次成功 / 失败 LLM 调用都写 `audit_log`：
+- 成功：`action='ai_generate_skeleton'`、`target_type='magazine'`、`target_id=<new_id>`、`details={ page_count, prompt_chars, llm_model, duration_ms, retries }`
+- 失败：`action='ai_generate_skeleton_failed'`、`details={ reason, http_status, retries }`（写 audit 但不暴露 prompt 全文，仅 `prompt_chars`）
+
+平台管理员可在 `/admin/audit.html` 看到全部 AI 调用记录（action 筛选新增 `ai_generate_skeleton` / `ai_generate_skeleton_failed` 两个值）。
+
+### 限速
+
+**本期未做**。每次调用都会真实打 MiniMax API，恶意 owner 可刷量产生费用。
+
+**v6.1 建议方案**：
+- 每租户 `N=50` 次/天（默认），平台管理员可调
+- 实现位置：`server/admin.js` 端点入口加 `aiRateLimit(req.tenant.id, 'skeleton')`
+- 持久化：data.json 加 `_rate_limit` 表（`{ tenant_id, action, date, count }`），每天 UTC+8 0 点 reset
+- 429 响应：`{ error: 'AI_RATE_LIMIT', retry_after_hours: <剩余小时> }`
+
+### 失败模式
+
+| 场景 | 行为 | 状态码 |
+|------|------|--------|
+| `MINIMAX_API_KEY` 未设 | 端点直接 500 + 明确错误 | 500 |
+| MiniMax 5xx | 退避重试 5s/15s/30s，3 次仍失败 → 5xx 抛回 | 503 |
+| MiniMax 429 | 同 5xx 退避重试 | 503 |
+| MiniMax 4xx（非 408） | 立即抛错，不重试 | 500 AI_UPSTREAM_ERROR |
+| 网络 30s 超时 | 单次超时 → 重试；3 次超时 → 502 | 502 |
+| JSON parse 失败 | 重试；3 次仍失败 → 500 | 500 AI_PARSE_ERROR |
+| `pages.length !== pageCount` | 视为 parse 错，重试 | 500 AI_PARSE_ERROR |
+| LLM 成功但 `addPages` 失败 | 回滚已建的 magazine（deleteMagazine） | 500 |
+| 租户被 suspend | 401 | 401 |
+
+### 非目标（v6.0 明确不做）
+
+- ❌ AI 选模板 / 模板中心（v6.2 路线）
+- ❌ AI 配图 / 文生图（依赖图片生成模型，成本 & 合规需评估）
+- ❌ AI 翻译（locale 仅作为 prompt hint，不真正切换输出语言风格以外的产物）
+- ❌ AI 改稿 / 编辑已有杂志（无 `PATCH /api/admin/ai/edit`，用户手动改）
+- ❌ 限速（v6.1 才做）
+- ❌ AI 审计大屏（v6.2 候选；本期 audit 页 action 筛选已支持，但无独立 AI 看板）
+- ❌ 多模型路由（锁死 MiniMax-M3）
+- ❌ 流式输出（SSE / stream）—— 本期 wait-then-return，UI 用 spinner
+
+---
+
+## v6.1 增量 — AI 限速 + 审计大屏
+
+### 范围
+
+**做**：
+- 1️⃣ 每租户每日硬上限的 AI 调用限速：避免 owner 刷量产生 MiniMax API 费用
+- 2️⃣ 超限返回标准 429 + 响应头，方便前端展示
+- 3️⃣ 限速命中独立写 `audit_log`（`action='ai_rate_limited'`），大屏可单独计数
+- 4️⃣ AI 调用大屏（独立 admin 页）：4 卡片 + 7 日 SVG 柱状图 + 失败 top 5 + 今日剩余配额
+
+**不做**（明确砍掉，留 v6.2+）：
+- ❌ 跨租户 benchmark / 平台侧 AI 总量看板
+- ❌ 计费集成（按 AI 调用量额外扣费）
+- ❌ Grafana / Prometheus 接入
+- ❌ 限速策略可配置 UI（仅 env 覆盖，不做租户级面板）
+- ❌ 失败 audit 改造（v6.0 失败分支不写 audit，failed 计数恒为 0，大屏按空态展示）
+
+### 限速策略
+
+| 配置 | 值 | 说明 |
+|------|-----|------|
+| 默认上限 | **20 次/租户/24h** | `AI_DAILY_LIMIT` env 可覆盖；env 缺失 / 非整数 / ≤ 0 → fallback 20 |
+| 窗口 | 24h（UTC 对齐） | `AI_DAILY_WINDOW_MS = 24*60*60*1000`；桶 `key = floor(now/windowMs)`，同一桶内累计 |
+| 存储 | 内存 `Map<key, { count, resetAt }>` | **纯 Node.js Map，无外部依赖**；进程重启清空（v6.1 接受，不强求持久化） |
+| 清理 | `setInterval` 每 60s 扫一次过期 entry | `unref()` 不阻塞进程退出；`store.size > 1024` 时在高频路径顺手扫一次 |
+| 限速通过 | 自增 1，写 `audit_log action='ai_generate_skeleton' details.rate_remaining` | 大屏可直接 sum 求「今日剩余趋势」 |
+| 限速拒绝 | **不**消耗配额（不 increment），写 `audit_log action='ai_rate_limited'` | `current` 字段保持 `limit`，返回 `allowed=false` |
+
+**实现位置**：`server/rate-limit.js`（新文件，**独立模块便于单测**）。
+
+### 端点
+
+#### `POST /api/admin/ai/skeleton`（v6.0 端点，v6.1 加限速）
+
+- **行为**（在调 `aiClient.generateMagazineSkeleton` **之前**插限速）：
+  ```
+  checkAndIncrement(tenant.id, 'ai_skeleton', AI_DAILY_LIMIT, AI_DAILY_WINDOW_MS)
+    → { allowed, current, limit, resetAt }
+  ```
+- **限速通过**：照常走 LLM 调用，audit 写 `ai_generate_skeleton`，`details.rate_remaining = limit - current`
+- **限速拒绝**：直接 429 + 写 `audit_log action='ai_rate_limited'`
+- **mock 模式**（`MOCK_AI=1`）：**也走限速**（同配额），保证真实场景和开发场景一致
+
+#### `GET /api/admin/ai-stats?since=ISO`（v6.1 新增）
+
+- **Auth**：`auth.requireAuth`（**owner / editor 都能看**，不限制 owner-only；audit 页已经是同样口径）
+- **`since` 默认**：7 天前（`now - 7*24*3600*1000`）
+- **返回**：
+  ```json
+  {
+    "summary": {
+      "total": 42,                  // ai_generate_skeleton 总数
+      "success": 38,                // 成功（details.error 空）
+      "failed": 0,                  // 失败（details.error 非空；v6.0 失败分支不写 audit，恒为 0 → UI 空态）
+      "rate_limited": 4,            // ai_rate_limited 命中
+      "avg_duration_ms": 1240,
+      "p95_duration_ms": 2100
+    },
+    "trend": [
+      { "bucket": "2026-06-06T00:00:00.000Z", "total": 5, "success": 5, "failed": 0, "rate_limited": 0 },
+      ...   // 7 个桶，按 UTC 零点对齐
+    ],
+    "top_failures": [
+      { "error": "AI_UPSTREAM_TIMEOUT", "count": 3 }
+    ],
+    "quota": {                     // 顶卡用：今日剩余配额
+      "current": 12,                // 今日已用
+      "limit": 20,
+      "resetAt": "2026-06-13T00:00:00.000Z"
+    }
+  }
+  ```
+- **p95 算法**：`sort` 后取 `Math.floor(n*0.95)` 位置；`n<1` 回退 0；不引外部库
+- **trend 桶补齐**：`since..until` 之间缺数据的桶也返回（total=0），UI 折线/柱状不出现空洞
+
+#### `GET /api/admin/ai-quota`（v6.1 新增，**轻量**配额查询）
+
+- **Auth**：`auth.requireAuth`
+- **返回**：`{ current, limit, resetAt }`（不 increment，只 peek）
+- **实现**：`rateLimit.peek(tenantId, 'ai_skeleton', AI_DAILY_LIMIT, AI_DAILY_WINDOW_MS)`
+- **用途**：UI 在调用 `ai/skeleton` 之前就能预判「还剩 N 次」，避免用户填完 2000 字 prompt 提交后才看到 429
+
+### 429 响应
+
+```json
+{
+  "error": "已达今日 AI 生成上限（20 次），明天 0 点重置",
+  "current": 20,
+  "limit": 20,
+  "resetAt": "2026-06-13T00:00:00.000Z"
+}
+```
+
+- 状态码：`429 Too Many Requests`
+- `Content-Type: application/json; charset=utf-8`
+- 消息友好：明确告诉用户是「今日」超限 + 重置时间（明天 0 点）
+
+### 响应头（v6.0 端点 + v6.1 配额端点都加）
+
+| Header | 说明 | 示例 |
+|--------|------|------|
+| `X-RateLimit-Limit` | 窗口内总配额 | `20` |
+| `X-RateLimit-Remaining` | 剩余次数 | `15` |
+| `X-RateLimit-Reset` | 桶重置时间（ISO 8601） | `2026-06-13T00:00:00.000Z` |
+
+- **每次调用都带**（无论通过 / 拒绝）
+- 前端可直接读 3 个 header，无需额外请求配额端点
+
+### 审计大屏端点
+
+见上文 `GET /api/admin/ai-stats`。**额外** `audit_log` 写入约定：
+
+| 场景 | action | details 关键字段 |
+|------|--------|------------------|
+| 限速通过 + LLM 成功 | `ai_generate_skeleton` | `page_count`, `prompt_chars`, `model`, `mock`, `duration_ms`, `retries`, `rate_remaining` |
+| 限速拒绝 | `ai_rate_limited` | `action_blocked: 'ai_skeleton'`, `limit`, `current`, `reset_at`, `prompt_chars` |
+| 限速通过 + LLM 失败 | `ai_generate_skeleton`（details.error 写入） | 额外 `error: 'AI_UPSTREAM_TIMEOUT'` 等 |
+
+> **v6.1 遗留**：v6.0 失败分支**不**写 audit（admin.js:518 LLM 异常 → 直接 return 500）。v6.1 大屏 `failed` 计数因此恒为 0，对应空态；后续可在 v6.2 给失败分支补 `auth.audit(req, 'ai_generate_skeleton', { ..., details: { ..., error: e.message } })`。
+
+### 大屏 UI（`public/admin/ai-stats.html`）
+
+- **入口**：sidebar 在「AI 一句话生成」下方加「📊 AI 调用大屏」链接，Lucide 图标 `bar-chart-3`，href=`/admin/ai-stats.html`
+- **顶部 4 个大数字卡片**（grid layout，2×2 桌面 / 1×4 移动）：
+  1. **今日调用**（蓝色）— `summary.total`（包含 rate_limited）
+  2. **成功**（绿色）— `summary.success`
+  3. **失败**（红色，空态显示「—」）— `summary.failed`
+  4. **限速命中**（橙色）— `summary.rate_limited`
+- **顶部第 5 卡片**（横跨整行，高亮）：**「今日剩余配额：N / 20」**（调 `ai-quota` 端点；调用 `ai/skeleton` 后立即刷新）
+- **中部**：近 7 天 SVG 柱状图（**纯 SVG，不用 chart 库**；每个柱 = `summary.trend[i].total`；高度 = `count / maxCount * 200px`；hover 显示 tooltip 数字 + 时间）
+- **底部**：失败 top 5 表格（`top_failures`：列 = error 消息 / 次数；空态显示「暂无失败记录」）
+- **空态**：audit_log 无 ai_* 条目时，4 卡片显示「—」，柱状图显示「暂无数据」占位
+- **错误态**：拉数据失败（401/500）时顶部红条提示「数据加载失败：<err.message>」+ 重试按钮
+- **复用**：`nav.js` / `topbar.js` / `admin.css`（与 `ai-generate.html` 风格一致）
+- **XSS 防护**：`textContent` 渲染后端数据，禁止 `.innerHTML = userInput`
+- **零新依赖**（与 v6.0 一致：保持 zero new deps）
+
+### 数据来源
+
+**全部从 `audit_log` 表过滤 + 聚合**，不引入新表：
+
+```
+action IN ('ai_generate_skeleton', 'ai_rate_limited')
+  AND (since 过滤)
+  AND (tenant_id 隔离)
+```
+
+- `getAiCallStats({ tenantId, since, until })` → `{ total, success, failed, rate_limited, avg_duration_ms, p95_duration_ms }`
+- `getAiCallTrend({ tenantId, since, until, bucketMs })` → `[{ bucket, total, success, failed, rate_limited }]`
+- `getAiCallTopFailures({ tenantId, since, until, limit })` → `[{ error, count }]`
+- 三个函数**纯聚合** + **p95 简易算法**（sort + floor 0.95），不引外部库
+- 位置：`server/db/init.js` 末尾追加，module.exports 一并导出
+
+### Env 变量
+
+| 变量 | 默认 | 范围 | 说明 |
+|------|------|------|------|
+| `AI_DAILY_LIMIT` | `20` | `1..∞` 整数 | 每租户每日 AI 调用上限；env 缺失 / 非整数 / ≤ 0 → fallback 20 |
+| `MOCK_AI` | `0` | `0` / `1` | mock 模式开关（v6.0 沿用）；mock 模式也走限速（同配额） |
+
+### 非目标（v6.1 明确不做）
+
+- ❌ **跨租户 benchmark / 平台侧 AI 总量看板**（v6.2 候选）
+- ❌ **计费集成**（按 AI 调用量额外扣费；v6.2+ 路线）
+- ❌ **Grafana / Prometheus 接入**（v6.2 候选）
+- ❌ **限速策略可配置 UI**（仅 env 覆盖；v6.2 候选）
+- ❌ **失败 audit 改造**（v6.0 失败分支不写 audit；v6.1 failed 计数恒为 0，对应空态展示）
+- ❌ **限速持久化**（进程重启清空；接受；如需重启保留可 v6.2 改 data.json 表）
+- ❌ **滑动窗口**（v6.1 是固定窗口；v6.2+ 可改 sliding window）
+- ❌ **多动作统一限速**（本期只限 `ai_skeleton`；`ai_edit` 等未来动作单独配置）
+
+### v6.2 候选（来自 v6.0/v6.1 范围遗留 + 业务演进）
+
+1. 跨租户 AI 调用 benchmark（平台管理员视角）
+2. 计费集成（超出 plan 配额按调用量额外扣费）
+3. Grafana / Prometheus 接入（监控 + 告警）
+4. 限速策略可配置 UI（platform admin 调各租户 quota）
+5. 失败 audit 改造（v6.0 失败分支补 audit，让大屏 `failed` 不再恒为 0）
+6. 限速持久化到 data.json（重启不丢）
+7. 滑动窗口限速（sliding window，行为更平滑）
+8. 模板中心 / AI 选模板（v6.0 砍掉）
+9. AI 配图 / 文生图（成本 + 合规评估中）
+10. AI 改稿 / 编辑已有杂志
+11. 多模型路由（v6.0 锁死 MiniMax-M3；v6.2 拆 client 抽象层）
+
+---
+
+
+
