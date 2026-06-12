@@ -13,6 +13,7 @@ const smtp = require('./smtp');
 const payment = require('./payment');
 const aiClient = require('./ai-client');
 const rateLimit = require('./rate-limit');
+const templates = require('./templates');
 
 const app = express();
 app.set('trust proxy', true);
@@ -831,6 +832,407 @@ async function handleImportPdf(req, res) {
     warning: warnings.length ? warnings.join(' | ') : null
   });
 }
+
+// ========== v6.3 AI 改稿（owner only）==========
+//
+// POST /api/admin/magazines/:id/pages/:pageIndex/revise
+//   body: { action: 'rewrite'|'polish'|'expand'|'shorten' }
+//   行为：调 aiClient.revisePage → 写回 page.title/body → 审计 ai_revise_page → 限速 1 次/天
+//   未启用（enabled=0）的草稿也允许改稿
+//   失败：401 / 403 / 404（magazine 或 pageIndex 越界） / 422（action 非法） / 429（限速） / 502（LLM 3 次重试仍失败）
+//
+// POST /api/admin/magazines/:id/revise-all
+//   body: { actions: ['polish', 'expand', ...] }   (per-page action map; 长度必须等于 pages.length)
+//   行为：调 aiClient.reviseMagazine → 写回所有 page.title/body → 审计 ai_revise_magazine → 限速 pages.length 次/天
+//   失败：401 / 403 / 404（magazine） / 422（actions 长度错 / 单个 action 非法） / 429（限速） / 502（LLM 3 次重试仍失败）
+//
+// 限速桶：复用 v6.1 ai_skeleton 桶（同配额；不另开桶，避免 quota 拆分太细）
+// LLM 退避：复用 v6.0 5s/15s/30s × 3 次（详见 server/ai-client.js MAX_RETRIES / BACKOFF_MS）
+// action 枚举：server/ai-client.js REVISE_ACTIONS = ['rewrite','polish','expand','shorten']
+
+app.post('/api/admin/magazines/:id/pages/:pageIndex/revise', auth.requireRole('owner'), async (req, res) => {
+  const magazineId = Number(req.params.id);
+  const pageIndex = Number(req.params.pageIndex);
+
+  // ============ 1. 参数校验 ============
+  if (!Number.isFinite(magazineId) || magazineId <= 0) {
+    return res.status(422).json({ error: 'magazine id 非法' });
+  }
+  if (!Number.isInteger(pageIndex) || pageIndex < 1) {
+    return res.status(422).json({ error: 'pageIndex 必须是 ≥ 1 的整数' });
+  }
+  const action = (req.body && req.body.action || '').toString();
+  if (!aiClient.REVISE_ACTIONS.includes(action)) {
+    return res.status(422).json({
+      error: `action 必须是 ${aiClient.REVISE_ACTIONS.join('/')} 之一（实际 "${action}"）`,
+      allowed: aiClient.REVISE_ACTIONS
+    });
+  }
+
+  // ============ 2. 找 magazine + page（pageIndex 越界 → 404）============
+  const magazine = db.getMagazine(magazineId, { tenantId: req.tenant.id });
+  if (!magazine) return res.status(404).json({ error: '杂志不存在' });
+  const pages = db.getPages(magazineId, { tenantId: req.tenant.id });
+  if (pageIndex > pages.length) {
+    return res.status(404).json({ error: `pageIndex 越界（当前 ${pages.length} 页，请求第 ${pageIndex} 页）` });
+  }
+  const targetPage = pages[pageIndex - 1];  // pageIndex 是 1-based，pages 数组是 0-based
+  if (!targetPage) {
+    return res.status(404).json({ error: `第 ${pageIndex} 页不存在` });
+  }
+
+  // ============ 3. 限速（1 次/天，复用 ai_skeleton 桶）============
+  const rl = rateLimit.checkAndIncrement(req.tenant.id, 'ai_skeleton', AI_DAILY_LIMIT, AI_DAILY_WINDOW_MS);
+  const remaining = Math.max(0, rl.limit - rl.current);
+  res.setHeader('X-RateLimit-Limit', String(rl.limit));
+  res.setHeader('X-RateLimit-Remaining', String(remaining));
+  res.setHeader('X-RateLimit-Reset', rl.resetAt);
+  if (!rl.allowed) {
+    auth.audit(req, 'ai_rate_limited', {
+      tenant_id: req.tenant.id,
+      target_type: 'magazine',
+      target_id: magazineId,
+      details: {
+        action_blocked: 'ai_revise_page',
+        page_index: pageIndex,
+        action,
+        limit: rl.limit,
+        current: rl.current,
+        reset_at: rl.resetAt
+      }
+    });
+    return res.status(429).json({
+      error: `已达今日 AI 生成上限（${rl.limit} 次），明天 0 点重置`,
+      current: rl.current,
+      limit: rl.limit,
+      resetAt: rl.resetAt
+    });
+  }
+
+  // ============ 4. 调 LLM ============
+  const startedAt = Date.now();
+  let revised;
+  try {
+    revised = await aiClient.revisePage({
+      page: { title: targetPage.title, body: targetPage.body },
+      action,
+      locale: 'zh-CN'
+    });
+  } catch (e) {
+    if (!process.env.MINIMAX_API_KEY && process.env.MOCK_AI !== '1') {
+      console.error('[revise-page] MINIMAX_API_KEY not configured');
+      return res.status(500).json({ error: 'MINIMAX_API_KEY not configured' });
+    }
+    console.error('[revise-page] LLM call failed:', e && e.stack ? e.stack : e);
+    return res.status(502).json({ error: 'AI 改稿失败: ' + (e && e.message ? e.message : '未知错误') });
+  }
+
+  // ============ 5. 写回 page（白名单字段：title / body）============
+  const updated = db.updatePage(magazineId, targetPage.id, { title: revised.title, body: revised.body }, { tenantId: req.tenant.id });
+  if (!updated) {
+    // 极端并发：page 被删了 → 422（不该发生；防御性）
+    return res.status(422).json({ error: '页面已被删除，无法写回' });
+  }
+
+  // ============ 6. 审计 ============
+  const duration_ms = Date.now() - startedAt;
+  auth.audit(req, 'ai_revise_page', {
+    tenant_id: req.tenant.id,
+    target_type: 'page',
+    target_id: updated.id,
+    details: {
+      magazine_id: magazineId,
+      magazine_name: magazine.name,
+      page_index: pageIndex,
+      action,
+      old_title_len: (targetPage.title || '').length,
+      old_body_len: (targetPage.body || '').length,
+      new_title_len: revised.title.length,
+      new_body_len: revised.body.length,
+      model: revised._meta.model,
+      retries: revised._meta.retries,
+      duration_ms,
+      mock: !!revised._meta.mock,
+      rate_remaining: remaining
+    }
+  });
+
+  res.json({
+    page: updated,
+    page_index: pageIndex,
+    action,
+    llm_meta: {
+      model: revised._meta.model,
+      duration_ms: revised._meta.duration_ms,
+      retries: revised._meta.retries,
+      mock: !!revised._meta.mock
+    },
+    rate_limit: {
+      limit: rl.limit,
+      remaining,
+      reset_at: rl.resetAt
+    }
+  });
+});
+
+app.post('/api/admin/magazines/:id/revise-all', auth.requireRole('owner'), async (req, res) => {
+  const magazineId = Number(req.params.id);
+
+  // ============ 1. 找 magazine（前置，必须先有 page 才能算限速数）============
+  if (!Number.isFinite(magazineId) || magazineId <= 0) {
+    return res.status(422).json({ error: 'magazine id 非法' });
+  }
+  const magazine = db.getMagazine(magazineId, { tenantId: req.tenant.id });
+  if (!magazine) return res.status(404).json({ error: '杂志不存在' });
+  const pages = db.getPages(magazineId, { tenantId: req.tenant.id });
+  if (pages.length === 0) {
+    return res.status(422).json({ error: '杂志无页面，无法整本重生成' });
+  }
+
+  // ============ 2. 校验 actions 数组（per-page action map）============
+  const actions = req.body && Array.isArray(req.body.actions) ? req.body.actions : null;
+  if (!actions) {
+    return res.status(422).json({ error: 'actions 必须是数组（长度 = 页面数）', expected_length: pages.length });
+  }
+  if (actions.length !== pages.length) {
+    return res.status(422).json({
+      error: `actions 长度必须等于页面数（${pages.length}），实际 ${actions.length}`,
+      expected_length: pages.length,
+      got_length: actions.length
+    });
+  }
+  for (let i = 0; i < actions.length; i++) {
+    if (!aiClient.REVISE_ACTIONS.includes(actions[i])) {
+      return res.status(422).json({
+        error: `actions[${i}] 必须是 ${aiClient.REVISE_ACTIONS.join('/')} 之一（实际 "${actions[i]}"）`,
+        index: i,
+        allowed: aiClient.REVISE_ACTIONS
+      });
+    }
+  }
+
+  // ============ 3. 限速（pages.length 次/天；超限 → 429）============
+  // v6.3 设计决策：整本重生成是 1 次 LLM 调用（reviseMagazine）但代价 = pages.length 倍（用户视角）
+  // 前端 confirm modal 必须明示「将消耗 X 次 AI 配额」——这是 v6.3 端点契约的一部分
+  const rl = rateLimit.checkAndIncrement(req.tenant.id, 'ai_skeleton', AI_DAILY_LIMIT, AI_DAILY_WINDOW_MS);
+  const remaining = Math.max(0, rl.limit - rl.current);
+  res.setHeader('X-RateLimit-Limit', String(rl.limit));
+  res.setHeader('X-RateLimit-Remaining', String(remaining));
+  res.setHeader('X-RateLimit-Reset', rl.resetAt);
+  if (!rl.allowed) {
+    auth.audit(req, 'ai_rate_limited', {
+      tenant_id: req.tenant.id,
+      target_type: 'magazine',
+      target_id: magazineId,
+      details: {
+        action_blocked: 'ai_revise_magazine',
+        pages: pages.length,
+        limit: rl.limit,
+        current: rl.current,
+        reset_at: rl.resetAt
+      }
+    });
+    return res.status(429).json({
+      error: `已达今日 AI 生成上限（${rl.limit} 次），明天 0 点重置`,
+      current: rl.current,
+      limit: rl.limit,
+      resetAt: rl.resetAt
+    });
+  }
+
+  // ============ 4. 调 LLM（整本重生成：1 次调用，但用 pages.length × action 喂 prompt）============
+  // 注：v6.3 第一版 LLM 端只返 { pages: [{page_index, title, body}] }，不消费 per-page actions
+  //     （v6.4 候选：per-page action 作为"风格提示词"再发 LLM）
+  //     actions 仅在 audit 里记录意图
+  const startedAt = Date.now();
+  let revisedAll;
+  try {
+    revisedAll = await aiClient.reviseMagazine({
+      originalPrompt: magazine.description || magazine.name || '',
+      pages: pages.map(p => ({ page_index: p.page_order, title: p.title, body: p.body })),
+      locale: 'zh-CN'
+    });
+  } catch (e) {
+    if (!process.env.MINIMAX_API_KEY && process.env.MOCK_AI !== '1') {
+      console.error('[revise-all] MINIMAX_API_KEY not configured');
+      return res.status(500).json({ error: 'MINIMAX_API_KEY not configured' });
+    }
+    console.error('[revise-all] LLM call failed:', e && e.stack ? e.stack : e);
+    return res.status(502).json({ error: '整本重生成失败: ' + (e && e.message ? e.message : '未知错误') });
+  }
+
+  // ============ 5. 写回所有 page ============
+  const updates = [];
+  for (const rev of revisedAll.pages) {
+    const target = pages.find(p => p.page_order === rev.page_index);
+    if (!target) {
+      // LLM 返回的 page_index 找不到（不该发生；防御性）
+      console.warn('[revise-all] LLM returned page_index not in pages:', rev.page_index);
+      continue;
+    }
+    const upd = db.updatePage(magazineId, target.id, { title: rev.title, body: rev.body }, { tenantId: req.tenant.id });
+    if (upd) updates.push({ page_index: rev.page_index, page: upd });
+  }
+  if (updates.length === 0) {
+    return res.status(500).json({ error: '所有页写回失败（可能并发被删）' });
+  }
+
+  // ============ 6. 审计 ============
+  const duration_ms = Date.now() - startedAt;
+  const actionsSummary = actions.reduce((acc, a) => { acc[a] = (acc[a] || 0) + 1; return acc; }, {});
+  auth.audit(req, 'ai_revise_magazine', {
+    tenant_id: req.tenant.id,
+    target_type: 'magazine',
+    target_id: magazineId,
+    details: {
+      magazine_name: magazine.name,
+      pages: pages.length,
+      actions: actionsSummary,         // 用户意图分布（如 {"polish": 3, "expand": 1}）
+      model: revisedAll._meta.model,
+      retries: revisedAll._meta.retries,
+      duration_ms,
+      mock: !!revisedAll._meta.mock,
+      rate_remaining: remaining
+    }
+  });
+
+  res.json({
+    pages: updates.map(u => u.page),
+    updated_count: updates.length,
+    expected_count: pages.length,
+    llm_meta: {
+      model: revisedAll._meta.model,
+      duration_ms: revisedAll._meta.duration_ms,
+      retries: revisedAll._meta.retries,
+      mock: !!revisedAll._meta.mock
+    },
+    rate_limit: {
+      limit: rl.limit,
+      remaining,
+      reset_at: rl.resetAt
+    }
+  });
+});
+
+// ========== v6.3 模板系统（第二支线 = 改模板） ==========
+// - 3 套内置模板 hardcoded 在 server/templates.js（business/education/minimal）
+// - 用户已选「手动选 + 实时预览，不自动套版」—— 改字段（colors/fonts/layout/elements）由用户手动来
+// - 这 3 个端点只暴露 admin 端（owner 写、任意认证读），reader 端不暴露模板概念
+// - 「改 4 属性 + 不动 page 数据」= 模板仅用于预览生成（css_vars + element_classes），不入 page 字段
+//
+// GET  /api/admin/templates                       → 3 套模板列表（任意认证可读）
+// PUT  /api/admin/magazines/:id/template          → 设置 magazine.template_id（owner only）
+// GET  /api/admin/magazines/:id/template-preview  → 返 css_vars + element_classes（任意认证可读）
+
+// GET /api/admin/templates —— 列出全部 3 套内置模板
+//   auth: requireAuth（owner/editor/viewer 都能看——给前端下拉框 / 颜色选择器用）
+//   返回: [{ id, name, description, colors, fonts, layout, elements }, ...]
+app.get('/api/admin/templates', auth.requireAuth, (req, res) => {
+  try {
+    const list = templates.listTemplates().map(t => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      colors: t.colors,
+      fonts: t.fonts,
+      layout: t.layout,
+      elements: t.elements
+    }));
+    res.json(list);
+  } catch (e) {
+    console.error('[templates] list failed:', e && e.stack ? e.stack : e);
+    res.status(500).json({ error: '模板列表查询失败: ' + (e && e.message ? e.message : '未知错误') });
+  }
+});
+
+// PUT /api/admin/magazines/:id/template —— 设置杂志的 template_id（owner only）
+//   body: { template_id: string, overrides?: object }
+//   行为：
+//     - template_id 必填，且必须在合法集合内（business/education/minimal）；非法 → 400
+//     - 写入 data.json 的 magazines[].template_id；其它字段（pages/title/body 等）**不动**
+//     - overrides 字段**不**持久化（v6.3 决定：保持存储简单；overrides 是预览态的临时覆盖，重启即丢）
+//     - magazine 不存在 / 跨租户 → 404；非 owner → 403
+//   写审计：'set_magazine_template' 包含 magazine_id / template_id / has_overrides
+app.put('/api/admin/magazines/:id/template', auth.requireRole('owner'), (req, res) => {
+  const body = req.body || {};
+  const templateId = (body.template_id || '').toString().trim();
+  if (!templateId) return res.status(400).json({ error: 'template_id 必填' });
+  if (!templates.isValidTemplateId(templateId)) {
+    return res.status(400).json({
+      error: '未知 template_id: ' + templateId,
+      valid_ids: templates.listTemplateIds()
+    });
+  }
+
+  const tenantId = req.tenant.is_platform_admin ? undefined : req.tenant.id;
+  const magazine = db.getMagazine(req.params.id, { tenantId });
+  if (!magazine) return res.status(404).json({ error: '杂志不存在' });
+
+  // 校验 overrides 字段形状（防御性：仅校验类型，不强校验具体内容——buildPreview 会兜底）
+  let hasOverrides = false;
+  if (body.overrides !== undefined && body.overrides !== null) {
+    if (typeof body.overrides !== 'object' || Array.isArray(body.overrides)) {
+      return res.status(400).json({ error: 'overrides 必须是 object（不允许是数组）' });
+    }
+    hasOverrides = true;
+  }
+
+  const updated = db.updateMagazine(magazine.id, { template_id: templateId }, { tenantId });
+  auth.audit(req, 'set_magazine_template', {
+    tenant_id: updated.tenant_id,
+    target_type: 'magazine',
+    target_id: updated.id,
+    details: {
+      template_id: templateId,
+      has_overrides: hasOverrides,
+      // 不存 overrides 内容（设计决定：覆盖是预览态）
+      magazine_name: updated.name
+    }
+  });
+  res.json({
+    id: updated.id,
+    template_id: updated.template_id,
+    // 同时回传最新预览（前端 PUT 后直接 apply，无需再发一次 GET）
+    preview: templates.buildPreview(updated.template_id, body.overrides)
+  });
+});
+
+// GET /api/admin/magazines/:id/template-preview —— 取杂志当前的模板预览
+//   auth: requireAuth（owner/editor/viewer 都能看；调端点确认视觉不暴露敏感数据）
+//   query: ?overrides=<json-string>  可选；JSON 序列化后服务端解析（GET 不带 body）
+//           例：?overrides={"colors":{"primary":"#ff0000"}}  → 主色临时改红
+//   返回: { magazine_id, template_id, template_name, css_vars, element_classes }
+//   行为：
+//     - magazine 不存在 / 跨租户 → 404
+//     - magazine.template_id 为 null（未选模板）→ 用 fallback 'business'
+//     - overrides 损坏 / 非 object → 降级为无 overrides
+app.get('/api/admin/magazines/:id/template-preview', auth.requireAuth, (req, res) => {
+  const tenantId = req.tenant.is_platform_admin ? undefined : req.tenant.id;
+  const magazine = db.getMagazine(req.params.id, { tenantId });
+  if (!magazine) return res.status(404).json({ error: '杂志不存在' });
+
+  // 解析可选 overrides
+  let overrides;
+  if (req.query.overrides !== undefined && req.query.overrides !== '') {
+    try {
+      overrides = JSON.parse(req.query.overrides);
+      if (overrides === null || typeof overrides !== 'object' || Array.isArray(overrides)) {
+        overrides = undefined;  // 非法形状 → 降级无 overrides
+      }
+    } catch (e) {
+      overrides = undefined;  // JSON.parse 失败 → 降级无 overrides
+    }
+  }
+
+  const preview = templates.buildPreview(magazine.template_id, overrides);
+  res.json({
+    magazine_id: magazine.id,
+    template_id: magazine.template_id,    // 可能是 null
+    template_name: preview.template_name,
+    css_vars: preview.css_vars,
+    element_classes: preview.element_classes
+  });
+});
 
 // ========== Reader 端分析（看板） ==========
 app.get('/api/admin/analytics', auth.requireAuth, (req, res) => {

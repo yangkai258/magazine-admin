@@ -20,7 +20,7 @@ const defaultData = {
   password_reset_tokens: [],
   email_log: [],
   user_invitations: [],
-  _meta: { schema_version: 6 }
+  _meta: { schema_version: 7 }
 };
 
 let data = loadData();
@@ -84,6 +84,25 @@ function loadData() {
       // v6：升 schema_version（v5 → v6）
       if (!parsed._meta.schema_version || parsed._meta.schema_version < 6) {
         parsed._meta.schema_version = 6;
+        parsed._meta.migrated_at = nowIso;
+        needsSave = true;
+      }
+      // 兼容老 magazines 缺 template_id 字段（v6.3：模板系统新增 template_id，可空）
+      // 注意：只 backfill key，不改业务值——保持 v6.0/v6.1/v6.2 已有的 magazine「未选模板」原状
+      //       （API 层会按 null 走 fallback 模板，行为与未选模板一致）
+      let magazinesBackfilled = 0;
+      parsed.magazines.forEach(m => {
+        if (m.template_id === undefined) {
+          m.template_id = null;
+          magazinesBackfilled += 1;
+        }
+      });
+      if (magazinesBackfilled > 0) {
+        console.log('[db] backfilled template_id on', magazinesBackfilled, 'magazines');
+      }
+      // v7：升 schema_version（v6 → v7）
+      if (!parsed._meta.schema_version || parsed._meta.schema_version < 7) {
+        parsed._meta.schema_version = 7;
         parsed._meta.migrated_at = nowIso;
         needsSave = true;
       }
