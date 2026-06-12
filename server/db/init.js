@@ -467,6 +467,119 @@ function getEmailLog({ to_email, status, limit = 200, offset = 0 } = {}) {
   return { total: list.length, items: list.slice(offset, offset + limit) };
 }
 
+// ========== AI 调用统计（v6.1 大屏用） ==========
+// 从 audit_log 过滤 ai_generate_skeleton + ai_rate_limited 聚合：
+//   getAiCallStats  → 总体计数 + 平均/p95 耗时
+//   getAiCallTrend  → 按天桶聚合（每日 total / success / failed / rate_limited）
+// 约定：
+//   - ai_generate_skeleton 成功 audit：details.duration_ms 有值
+//   - ai_generate_skeleton 失败 audit：details.error 非空（**前提：上游在失败分支也写 audit** —— 当前 v6.0 实现失败分支不写，所以 failed 计数会恒为 0，大屏对应空态；这是 sibling task 的事）
+//   - ai_rate_limited audit：单独算 rate_limited 桶
+//   - success = ai_generate_skeleton 总数 - failed；total = success + failed + rate_limited
+//   - p95 用 sort 后取 Math.floor(n*0.95) 位置实现（不引外部库），n<2 时回退到该值或 0
+function _aiFilterLogs({ tenantId, since, until } = {}) {
+  const logs = (data.audit_log || []).filter(l => {
+    if (l.action !== 'ai_generate_skeleton' && l.action !== 'ai_rate_limited') return false;
+    if (tenantId !== undefined && tenantId !== null && Number(l.tenant_id) !== Number(tenantId)) return false;
+    if (since && new Date(l.timestamp) < new Date(since)) return false;
+    if (until && new Date(l.timestamp) > new Date(until)) return false;
+    return true;
+  });
+  return logs;
+}
+
+function getAiCallStats({ tenantId, since, until } = {}) {
+  const logs = _aiFilterLogs({ tenantId, since, until });
+  const genLogs = logs.filter(l => l.action === 'ai_generate_skeleton');
+  const rlLogs = logs.filter(l => l.action === 'ai_rate_limited');
+  // failed = details.error 非空（**当前 v6.0 失败分支不写 audit，故恒为 0**；前端按空态展示）
+  const failedLogs = genLogs.filter(l => l.details && l.details.error);
+  const successLogs = genLogs.filter(l => !l.details || !l.details.error);
+  // 平均/p95 耗时：只在 success 里算（失败无 duration_ms）
+  const durations = successLogs
+    .map(l => (l.details && Number(l.details.duration_ms)) || 0)
+    .filter(n => Number.isFinite(n) && n > 0)
+    .sort((a, b) => a - b);
+  const avg = durations.length
+    ? Math.round(durations.reduce((s, n) => s + n, 0) / durations.length)
+    : 0;
+  let p95 = 0;
+  if (durations.length >= 1) {
+    const idx = Math.min(durations.length - 1, Math.floor(durations.length * 0.95));
+    p95 = durations[idx] || 0;
+  }
+  return {
+    total: genLogs.length,                 // ai_generate_skeleton 总数
+    success: successLogs.length,           // 成功
+    failed: failedLogs.length,             // 失败（依赖上游失败审计）
+    rate_limited: rlLogs.length,           // 限速命中
+    avg_duration_ms: avg,
+    p95_duration_ms: p95
+  };
+}
+
+function getAiCallTrend({ tenantId, since, until, bucketMs = 86400000 } = {}) {
+  // 默认按天聚合；bucketMs 留作将来扩展（如按小时）。since/until 之间补齐空桶，避免 UI 折线/柱状出现空洞。
+  const now = Date.now();
+  const startMs = since ? new Date(since).getTime() : (now - 7 * 86400000);
+  const endMs = until ? new Date(until).getTime() : now;
+  const step = Math.max(3600000, Number(bucketMs) || 86400000);  // 最小 1h
+
+  // 桶 key：UTC 零点对齐（与 admin.js 限速的 AI_DAILY_WINDOW_MS 行为一致：每天 0 点按 UTC 对齐）
+  const bucketKey = (ms) => Math.floor(ms / step) * step;
+  const buckets = new Map();  // key(epoch) -> { total, success, failed, rate_limited }
+  // 先填满空桶（保证返回的数组等长）
+  for (let t = bucketKey(startMs); t <= endMs; t += step) {
+    buckets.set(t, { total: 0, success: 0, failed: 0, rate_limited: 0 });
+  }
+
+  const logs = _aiFilterLogs({ tenantId, since: new Date(startMs).toISOString(), until: new Date(endMs).toISOString() });
+  logs.forEach(l => {
+    const k = bucketKey(new Date(l.timestamp).getTime());
+    const b = buckets.get(k);
+    if (!b) return;
+    if (l.action === 'ai_rate_limited') {
+      b.rate_limited += 1;
+      b.total += 1;
+    } else if (l.action === 'ai_generate_skeleton') {
+      if (l.details && l.details.error) {
+        b.failed += 1;
+      } else {
+        b.success += 1;
+      }
+      b.total += 1;
+    }
+  });
+
+  // 转成 [{ bucket, total, success, failed, rate_limited }] 按时间正序
+  return Array.from(buckets.keys())
+    .sort((a, b) => a - b)
+    .map(k => ({
+      bucket: new Date(k).toISOString(),
+      total: buckets.get(k).total,
+      success: buckets.get(k).success,
+      failed: buckets.get(k).failed,
+      rate_limited: buckets.get(k).rate_limited
+    }));
+}
+
+function getAiCallTopFailures({ tenantId, since, until, limit = 5 } = {}) {
+  // 失败榜：聚合 ai_generate_skeleton 中 details.error 非空的条目，按 error 消息归类取 top N
+  // 注意：当前 v6.0 失败分支不写 audit，所以这个函数正常会返回 []；等 sibling task 给失败分支补 audit 后，这里就自动有数据。
+  const logs = _aiFilterLogs({ tenantId, since, until }).filter(l =>
+    l.action === 'ai_generate_skeleton' && l.details && l.details.error
+  );
+  const counter = new Map();
+  logs.forEach(l => {
+    const msg = String(l.details.error || '未知错误').trim().slice(0, 200) || '未知错误';
+    counter.set(msg, (counter.get(msg) || 0) + 1);
+  });
+  return Array.from(counter.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([error, count]) => ({ error, count }));
+}
+
 // ========== Audit Log（v3 已加，保留） ==========
 function addAuditLog(entry) {
   if (!data.audit_log) data.audit_log = [];
@@ -794,6 +907,8 @@ module.exports = {
   getTenantUsage,
   // analytics (v4)
   addReaderEvent, getReaderStats, getReaderStatsByMagazine,
+  // ai call stats (v6.1)
+  getAiCallStats, getAiCallTrend, getAiCallTopFailures,
   // publish
   snapshotForPublish,
   // utility

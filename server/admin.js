@@ -589,6 +589,64 @@ app.get('/api/admin/analytics', auth.requireAuth, (req, res) => {
   res.json({ summary: { total_views: stats.total_views, unique_viewers: stats.unique_viewers, completes: stats.completes, avg_dwell_ms: stats.avg_dwell_ms }, by_magazine: byMag, since });
 });
 
+// ========== v6.1 AI 调用大屏（owner/editor 都能看） ==========
+// GET /api/admin/ai-stats?since=ISO&until=ISO
+//   auth: requireAuth（owner 和 editor 都可看，按租户隔离）
+//   默认 since = 7 天前，until = 现在
+//   返回：
+//     {
+//       summary: { total, success, failed, rate_limited, avg_duration_ms, p95_duration_ms, success_rate },
+//       trend:   [{ bucket: ISO, total, success, failed, rate_limited }]   // 按天 UTC 对齐
+//       top_failures: [{ error, count }]   // 失败 Top 5（依赖上游失败审计；v6.0 失败分支不写 audit 时为空）
+//       quota:   { current, limit, reset_at }                             // 今日剩余配额（in-memory rate-limit）
+//       since, until
+//     }
+//   失败：401 / 403 / 500（极少）
+app.get('/api/admin/ai-stats', auth.requireAuth, (req, res) => {
+  try {
+    const now = Date.now();
+    const since = req.query.since || new Date(now - 7 * 24 * 3600 * 1000).toISOString();
+    const until = req.query.until || new Date(now).toISOString();
+    const tenantId = req.tenant.id;
+
+    const stats = db.getAiCallStats({ tenantId, since, until });
+    // 加 success_rate 给前端展示百分比（保留 1 位小数）
+    const successRate = stats.total > 0
+      ? Math.round((stats.success / stats.total) * 1000) / 10
+      : 0;
+
+    const trend = db.getAiCallTrend({ tenantId, since, until });
+    const topFailures = db.getAiCallTopFailures({ tenantId, since, until, limit: 5 });
+
+    // 今日配额（v6.1 限速器在内存中；进程重启会清空，回 0）
+    const rl = rateLimit.peek(tenantId, 'ai_skeleton', AI_DAILY_LIMIT, AI_DAILY_WINDOW_MS);
+
+    res.json({
+      summary: {
+        total: stats.total,
+        success: stats.success,
+        failed: stats.failed,
+        rate_limited: stats.rate_limited,
+        avg_duration_ms: stats.avg_duration_ms,
+        p95_duration_ms: stats.p95_duration_ms,
+        success_rate: successRate
+      },
+      trend,
+      top_failures: topFailures,
+      quota: {
+        current: rl.current,
+        limit: rl.limit,
+        reset_at: rl.resetAt
+      },
+      since,
+      until
+    });
+  } catch (e) {
+    console.error('[ai-stats] failed:', e && e.stack ? e.stack : e);
+    res.status(500).json({ error: 'AI 统计查询失败: ' + (e && e.message ? e.message : '未知错误') });
+  }
+});
+
 // ========== Email log（platform_admin 看） ==========
 app.get('/api/admin/email-log', auth.requirePlatformAdmin, (req, res) => {
   const { to_email, status, limit, offset } = req.query;

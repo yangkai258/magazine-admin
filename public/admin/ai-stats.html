@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 调用大屏 · 杂志管理平台</title>
+  <link rel="stylesheet" href="/admin/css/style.css?v=3">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script src="/admin/js/nav.js?v=3"></script>
+  <script src="/admin/js/topbar.js?v=3"></script>
+  <style>
+    /* AI 主题渐变 hero —— 紫蓝调，区别于 reader 端的紫色 */
+    .ai-stats-hero {
+      background: linear-gradient(135deg, #4338ca 0%, #6d28d9 50%, #c026d3 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 22px 26px;
+      margin-bottom: 20px;
+      box-shadow: 0 6px 20px rgba(109, 40, 217, 0.22);
+      position: relative;
+      overflow: hidden;
+    }
+    .ai-stats-hero::before {
+      content: "";
+      position: absolute;
+      top: -40px; right: -40px;
+      width: 180px; height: 180px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 50%;
+    }
+    .ai-stats-hero::after {
+      content: "";
+      position: absolute;
+      bottom: -60px; right: 80px;
+      width: 120px; height: 120px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 50%;
+    }
+    .ai-stats-hero h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: relative; z-index: 1;
+    }
+    .ai-stats-hero p {
+      font-size: 13px;
+      line-height: 1.7;
+      opacity: 0.95;
+      position: relative; z-index: 1;
+      max-width: 820px;
+    }
+    .ai-stats-hero .hero-badges {
+      display: inline-flex;
+      gap: 6px;
+      margin-top: 10px;
+      position: relative; z-index: 1;
+    }
+    .ai-stats-hero .hero-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .ai-stats-hero code {
+      background: rgba(255,255,255,0.2);
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+
+    /* 时间筛选栏 */
+    .time-filter {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 14px;
+      position: relative; z-index: 1;
+      flex-wrap: wrap;
+    }
+    .time-filter .tf-label { font-size: 12px; opacity: 0.85; margin-right: 4px; }
+    .time-filter .tf-btn {
+      padding: 4px 12px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 14px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .time-filter .tf-btn:hover { background: rgba(255,255,255,0.3); }
+    .time-filter .tf-btn.active {
+      background: #fff;
+      color: #6d28d9;
+      border-color: #fff;
+      font-weight: 600;
+    }
+    .time-filter .refresh-btn {
+      margin-left: auto;
+      padding: 4px 14px;
+      background: rgba(255,255,255,0.95);
+      color: #6d28d9;
+      border: none;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .time-filter .refresh-btn:hover { background: #fff; }
+
+    /* 5 个大数字卡：4 个 KPI + 1 个今日配额 */
+    .ai-stats-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .ai-stat {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: var(--shadow);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .ai-stat:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+    .ai-stat-icon {
+      width: 44px; height: 44px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .ai-stat-icon.ic-total    { background: #eef2ff; }
+    .ai-stat-icon.ic-success  { background: #dcfce7; }
+    .ai-stat-icon.ic-failed   { background: #fee2e2; }
+    .ai-stat-icon.ic-rl       { background: #fef3c7; }
+    .ai-stat-icon.ic-quota    { background: linear-gradient(135deg, #ede9fe, #fce7f3); }
+    .ai-stat-num {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+    }
+    .ai-stat-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+    .ai-stat-sub {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 3px;
+      opacity: 0.85;
+    }
+    /* 配额卡的进度条 */
+    .quota-bar {
+      height: 6px;
+      background: #f3f4f6;
+      border-radius: 3px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+    .quota-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4f46e5, #c026d3);
+      border-radius: 3px;
+      transition: width 0.4s;
+    }
+    .quota-bar-fill.warn { background: linear-gradient(90deg, #f59e0b, #f97316); }
+    .quota-bar-fill.danger { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+    /* 卡片通用 */
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px 20px;
+      margin-bottom: 20px;
+    }
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .panel-title-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    /* 柱状图 SVG 容器 */
+    .bar-chart-wrap {
+      width: 100%;
+      overflow-x: auto;
+      padding: 4px 0;
+    }
+    .bar-chart {
+      display: block;
+      width: 100%;
+      height: auto;
+      min-width: 480px;
+    }
+    .bar-chart .bar-rect-success { fill: #10b981; }
+    .bar-chart .bar-rect-failed  { fill: #ef4444; }
+    .bar-chart .bar-rect-rl      { fill: #f59e0b; }
+    .bar-chart .bar-axis-line { stroke: #d1d5db; stroke-width: 1; }
+    .bar-chart .bar-grid-line { stroke: #f3f4f6; stroke-width: 1; stroke-dasharray: 2 2; }
+    .bar-chart .bar-label-name {
+      font-size: 11px;
+      fill: var(--text-secondary, #6b7280);
+      font-family: inherit;
+    }
+    .bar-chart .bar-label-value {
+      font-size: 11px;
+      fill: var(--text-secondary, #6b7280);
+      font-family: inherit;
+    }
+    .bar-chart .bar-label-axis {
+      font-size: 11px;
+      fill: #4b5563;
+      font-weight: 600;
+    }
+    .bar-chart .legend-text {
+      font-size: 11px;
+      fill: #4b5563;
+      font-family: inherit;
+    }
+
+    /* 失败榜 */
+    .fail-table td.error-msg {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: #991b1b;
+      max-width: 480px;
+      word-break: break-all;
+    }
+    .fail-table td.col-count {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      color: #ef4444;
+    }
+
+    /* 加载 / 错误态 */
+    .ai-stats-loading {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+    .ai-stats-error {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--danger, #dc2626);
+      font-size: 13px;
+    }
+
+    /* 空态（暂无数据） */
+    .ai-empty {
+      padding: 36px 16px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+    .ai-empty-icon { font-size: 40px; margin-bottom: 8px; opacity: 0.55; }
+    .ai-empty-hint { font-size: 12px; margin-top: 6px; opacity: 0.7; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <script>MAG_AUTH.requireAuth();</script>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar">
+        <h1 class="page-title">AI 调用大屏</h1>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button>
+      </header>
+      <div class="content-area" id="contentArea">
+
+        <!-- Hero -->
+        <div class="ai-stats-hero">
+          <h2><i data-lucide="bar-chart-3" style="width:18px;height:18px"></i> AI 调用监控</h2>
+          <p>
+            实时汇总 <code>ai_generate_skeleton</code> 和 <code>ai_rate_limited</code> 两条审计，帮你一眼看清：调用次数 / 成功率 / 平均 & P95 耗时 / 今日配额 / 失败 Top。
+            <strong>owner 和 editor 都能访问</strong>，按租户隔离。
+          </p>
+          <div class="hero-badges">
+            <span class="hero-badge">v6.1</span>
+            <span class="hero-badge">audit_log 聚合</span>
+            <span class="hero-badge">SVG 柱状图</span>
+          </div>
+
+          <!-- 时间筛选 + 刷新 -->
+          <div class="time-filter" id="timeFilter">
+            <span class="tf-label">时间窗口：</span>
+            <button class="tf-btn active" data-days="7">7 天</button>
+            <button class="tf-btn" data-days="30">30 天</button>
+            <button class="refresh-btn" id="refreshBtn">↻ 刷新</button>
+          </div>
+        </div>
+
+        <!-- 5 个统计卡：4 个 KPI + 今日配额 -->
+        <div class="ai-stats-stats" id="statsRow">
+          <div class="ai-stat">
+            <div class="ai-stat-icon ic-total">📞</div>
+            <div>
+              <div class="ai-stat-num" id="statTotal">--</div>
+              <div class="ai-stat-label">总调用（次）</div>
+              <div class="ai-stat-sub" id="statTotalSub">--</div>
+            </div>
+          </div>
+          <div class="ai-stat">
+            <div class="ai-stat-icon ic-success">✅</div>
+            <div>
+              <div class="ai-stat-num" id="statSuccess">--</div>
+              <div class="ai-stat-label">成功（次）</div>
+              <div class="ai-stat-sub" id="statSuccessRate">--</div>
+            </div>
+          </div>
+          <div class="ai-stat">
+            <div class="ai-stat-icon ic-failed">❌</div>
+            <div>
+              <div class="ai-stat-num" id="statFailed">--</div>
+              <div class="ai-stat-label">失败（次）</div>
+              <div class="ai-stat-sub" id="statFailedHint">--</div>
+            </div>
+          </div>
+          <div class="ai-stat">
+            <div class="ai-stat-icon ic-rl">🚦</div>
+            <div>
+              <div class="ai-stat-num" id="statRl">--</div>
+              <div class="ai-stat-label">限速命中（次）</div>
+              <div class="ai-stat-sub">已达每日上限被拦截</div>
+            </div>
+          </div>
+          <div class="ai-stat" style="background:linear-gradient(135deg,#f5f3ff 0%,#fdf4ff 100%);border-color:#e9d5ff">
+            <div class="ai-stat-icon ic-quota">⚡</div>
+            <div>
+              <div class="ai-stat-num" id="statQuota">--</div>
+              <div class="ai-stat-label">今日剩余配额</div>
+              <div class="quota-bar"><div class="quota-bar-fill" id="quotaFill" style="width:0%"></div></div>
+              <div class="ai-stat-sub" id="statQuotaHint">--</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 性能指标小条 -->
+        <div class="panel" style="padding:14px 20px">
+          <div class="panel-title" style="margin-bottom:0">
+            <span>⏱ 性能</span>
+            <span class="panel-title-hint" id="perfHint">--</span>
+          </div>
+          <div style="display:flex;gap:32px;flex-wrap:wrap;font-size:13px;color:var(--text-secondary);padding-top:6px">
+            <div>平均耗时：<b id="perfAvg" style="color:var(--text);font-variant-numeric:tabular-nums">--</b></div>
+            <div>P95 耗时：<b id="perfP95" style="color:var(--text);font-variant-numeric:tabular-nums">--</b></div>
+          </div>
+        </div>
+
+        <!-- 趋势柱状图 -->
+        <div class="panel">
+          <div class="panel-title">
+            <span>📊 每日 AI 调用趋势（按天聚合）</span>
+            <span class="panel-title-hint" id="chartHint">--</span>
+          </div>
+          <div class="bar-chart-wrap" id="chartWrap">
+            <div class="ai-stats-loading">加载中…</div>
+          </div>
+        </div>
+
+        <!-- 失败 Top 5 -->
+        <div class="panel">
+          <div class="panel-title">
+            <span>🚨 失败 Top 5</span>
+            <span class="panel-title-hint" id="failHint">--</span>
+          </div>
+          <div class="table-wrap" id="failTableWrap" style="border:none;box-shadow:none">
+            <table class="fail-table">
+              <thead>
+                <tr>
+                  <th style="width:60px">#</th>
+                  <th>错误消息</th>
+                  <th style="width:120px;text-align:center">次数</th>
+                </tr>
+              </thead>
+              <tbody id="failTable"></tbody>
+            </table>
+          </div>
+          <div id="failEmpty" class="ai-empty" style="display:none">
+            <div class="ai-empty-icon">🛡</div>
+            <div>暂无失败记录</div>
+            <div class="ai-empty-hint">
+              当 <code>ai_generate_skeleton</code> 走完 LLM 路径但在落库失败时，
+              会写入 <code>details.error</code> 审计。<br>
+              如果失败分支目前没写审计（v6.0 现状），这里会一直空——请关注 sibling task 的修复。
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="/admin/js/api.js"></script>
+  <script>
+    // 渲染侧边栏 nav（统一从 nav.js 拿 11 项，按角色过滤）
+    MAG_NAV.render('ai-stats');
+
+    // ========== 工具 ==========
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // ms → 「X 分 Y 秒」/ 「Y 秒」/ 「< 1 秒」
+    function formatDuration(ms) {
+      if (ms == null || !Number.isFinite(ms) || ms <= 0) return '0 秒';
+      if (ms < 1000) return ms + ' ms';
+      var totalSec = Math.round(ms / 1000);
+      if (totalSec < 60) return totalSec + ' 秒';
+      var min = Math.floor(totalSec / 60);
+      var sec = totalSec % 60;
+      return min + ' 分 ' + sec + ' 秒';
+    }
+
+    // 「N 天前」对应 ISO（保留时分秒为当前本地时间）
+    function daysAgoISO(days) {
+      var d = new Date();
+      d.setDate(d.getDate() - days);
+      return d.toISOString();
+    }
+
+    // 「YYYY-MM-DD」从 ISO 字符串
+    function shortDate(iso) {
+      if (!iso) return '--';
+      return String(iso).slice(0, 10);
+    }
+
+    function shortMonthDay(iso) {
+      // 「M-D」显示在柱状图 x 轴上，避免标签太长
+      if (!iso) return '--';
+      var d = new Date(iso);
+      return (d.getMonth() + 1) + '/' + d.getDate();
+    }
+
+    // ========== 状态 ==========
+    var state = {
+      days: 7,
+      data: null,
+      loading: false
+    };
+
+    function currentSince() {
+      return daysAgoISO(state.days);
+    }
+
+    // ========== API 拉取 ==========
+    async function loadAll() {
+      if (state.loading) return;
+      state.loading = true;
+      document.getElementById('chartWrap').innerHTML = '<div class="ai-stats-loading">加载中…</div>';
+      try {
+        var since = currentSince();
+        var resp = await api.get('/admin/ai-stats?since=' + encodeURIComponent(since));
+        state.data = resp;
+        renderAll();
+      } catch (e) {
+        console.error('[ai-stats] load failed', e);
+        state.data = null;
+        renderError(e && e.message ? e.message : '加载失败');
+      } finally {
+        state.loading = false;
+      }
+    }
+
+    function renderError(msg) {
+      // KPI 全部显示 0；图表和失败榜走空态
+      ['statTotal', 'statSuccess', 'statFailed', 'statRl', 'statQuota'].forEach(function (id) {
+        var el = document.getElementById(id); if (el) el.textContent = '--';
+      });
+      ['statTotalSub', 'statSuccessRate', 'statFailedHint', 'statQuotaHint'].forEach(function (id) {
+        var el = document.getElementById(id); if (el) el.textContent = '--';
+      });
+      ['perfAvg', 'perfP95', 'perfHint', 'chartHint', 'failHint'].forEach(function (id) {
+        var el = document.getElementById(id); if (el) el.textContent = '--';
+      });
+      document.getElementById('quotaFill').style.width = '0%';
+      document.getElementById('chartWrap').innerHTML =
+        '<div class="ai-stats-error">⚠ 加载失败：' + escapeHtml(msg) + '</div>';
+      document.getElementById('failTableWrap').style.display = 'none';
+      document.getElementById('failEmpty').style.display = 'none';
+      document.getElementById('failEmpty').innerHTML =
+        '<div class="ai-empty-icon">⚠</div>' +
+        '<div>加载失败</div>' +
+        '<div class="ai-empty-hint">' + escapeHtml(msg) + '</div>';
+    }
+
+    function renderAll() {
+      var d = state.data || {};
+      var s = d.summary || {};
+      var q = d.quota || { current: 0, limit: 20, reset_at: null };
+      var trend = d.trend || [];
+      var fails = d.top_failures || [];
+
+      // KPI 数字
+      document.getElementById('statTotal').textContent = (s.total || 0).toLocaleString();
+      document.getElementById('statSuccess').textContent = (s.success || 0).toLocaleString();
+      document.getElementById('statFailed').textContent = (s.failed || 0).toLocaleString();
+      document.getElementById('statRl').textContent = (s.rate_limited || 0).toLocaleString();
+
+      // 子文案
+      document.getElementById('statTotalSub').textContent =
+        '近 ' + state.days + ' 天 · 成功 + 失败';
+      document.getElementById('statSuccessRate').textContent =
+        s.total > 0 ? ('成功率 ' + (s.success_rate || 0) + '%') : '尚无调用';
+      document.getElementById('statFailedHint').textContent =
+        s.failed > 0 ? '需关注' : '暂无失败';
+      document.getElementById('statQuotaHint').textContent =
+        q.reset_at ? ('重置：' + shortDate(q.reset_at)) : '';
+
+      // 配额卡 + 进度条
+      var remaining = Math.max(0, (q.limit || 20) - (q.current || 0));
+      document.getElementById('statQuota').textContent = remaining + ' / ' + (q.limit || 20);
+      var usedPct = q.limit > 0 ? Math.min(100, Math.round((q.current / q.limit) * 100)) : 0;
+      var fill = document.getElementById('quotaFill');
+      fill.style.width = usedPct + '%';
+      fill.classList.remove('warn', 'danger');
+      if (usedPct >= 100) fill.classList.add('danger');
+      else if (usedPct >= 80) fill.classList.add('warn');
+
+      // 性能
+      document.getElementById('perfAvg').textContent = formatDuration(s.avg_duration_ms);
+      document.getElementById('perfP95').textContent = formatDuration(s.p95_duration_ms);
+      document.getElementById('perfHint').textContent = s.success > 0
+        ? ('基于 ' + s.success + ' 次成功调用')
+        : '尚无成功调用样本';
+
+      // 图表
+      renderChart(trend);
+
+      // 失败榜
+      renderFailures(fails);
+    }
+
+    // ========== SVG 柱状图（按天分组柱） ==========
+    function renderChart(trend) {
+      var wrap = document.getElementById('chartWrap');
+      var hint = document.getElementById('chartHint');
+      if (!trend || trend.length === 0) {
+        wrap.innerHTML = '<div class="ai-empty">' +
+          '<div class="ai-empty-icon">📭</div>' +
+          '<div>所选时段内暂无调用记录</div>' +
+          '<div class="ai-empty-hint">让 owner 在「AI 一句话生成」页发起一次调用，audit_log 就会写入</div>' +
+          '</div>';
+        hint.textContent = '0 个桶';
+        return;
+      }
+      hint.textContent = trend.length + ' 天 · 总调用 ' + trend.reduce(function (s, b) { return s + (b.total || 0); }, 0) + ' 次';
+
+      // 图表几何
+      // x: 每桶占 1 列，柱宽 = colW * 0.55；三色并排（success / failed / rate_limited）
+      // y: maxY = max(每桶的 total)
+      var colW = 56;                   // 每个桶占的水平距离
+      var barGap = 2;                  // 同桶内三种柱之间的间距
+      var groupGap = 0;                // 桶与桶之间间距（已在 colW 内预留）
+      var padLeft = 44;                // y 轴刻度文字宽度
+      var padRight = 16;
+      var padTop = 24;                 // legend 区域
+      var padBottom = 36;              // x 轴标签
+      var totalW = padLeft + trend.length * colW + padRight;
+      var chartH = 260;
+      var totalH = padTop + chartH + padBottom;
+
+      // 每桶内 3 柱的宽度（success / failed / rate_limited）
+      var innerW = colW - 12;
+      var bw = Math.max(4, Math.floor((innerW - barGap * 2) / 3));
+
+      var maxY = 1;
+      trend.forEach(function (b) {
+        var m = Math.max(b.success || 0, b.failed || 0, b.rate_limited || 0);
+        if (m > maxY) maxY = m;
+      });
+      // y 轴刻度：4 段 (0, 25%, 50%, 75%, 100%)
+      var ticks = [];
+      for (var i = 0; i <= 4; i++) {
+        var ratio = i / 4;
+        var value = Math.round(maxY * ratio);
+        var y = padTop + chartH - ratio * chartH;
+        ticks.push({ value: value, y: y });
+      }
+      var yScale = function (v) {
+        if (maxY === 0) return padTop + chartH;
+        return padTop + chartH - (v / maxY) * chartH;
+      };
+
+      var svgParts = [];
+      svgParts.push('<svg class="bar-chart" viewBox="0 0 ' + totalW + ' ' + totalH + '" preserveAspectRatio="xMinYMin meet" xmlns="http://www.w3.org/2000/svg">');
+
+      // Legend（顶部）
+      var legendY = padTop - 8;
+      var legendX = padLeft;
+      var legendItems = [
+        { color: '#10b981', label: '成功' },
+        { color: '#ef4444', label: '失败' },
+        { color: '#f59e0b', label: '限速' }
+      ];
+      legendItems.forEach(function (li, idx) {
+        var x = legendX + idx * 84;
+        svgParts.push('<rect x="' + x + '" y="' + (legendY - 9) + '" width="10" height="10" rx="2" fill="' + li.color + '"></rect>');
+        svgParts.push('<text class="legend-text" x="' + (x + 14) + '" y="' + (legendY - 1) + '" dominant-baseline="middle">' + escapeHtml(li.label) + '</text>');
+      });
+
+      // 网格 + Y 轴刻度
+      ticks.forEach(function (tk) {
+        svgParts.push('<line class="bar-grid-line" x1="' + padLeft + '" y1="' + tk.y + '" x2="' + (totalW - padRight) + '" y2="' + tk.y + '"></line>');
+        svgParts.push('<text class="bar-label-value" x="' + (padLeft - 6) + '" y="' + tk.y + '" text-anchor="end" dominant-baseline="middle">' + tk.value + '</text>');
+      });
+
+      // 每个桶
+      trend.forEach(function (b, i) {
+        var gx = padLeft + i * colW + 6;  // 桶内左 padding
+        var successY = yScale(b.success || 0);
+        var failedY = yScale(b.failed || 0);
+        var rlY = yScale(b.rate_limited || 0);
+        var baseY = padTop + chartH;
+
+        // 3 柱（success / failed / rate_limited）
+        var succX = gx;
+        var failX = gx + bw + barGap;
+        var rlX = failX + bw + barGap;
+
+        // success
+        if ((b.success || 0) > 0) {
+          svgParts.push('<rect class="bar-rect-success" x="' + succX + '" y="' + successY + '" width="' + bw + '" height="' + (baseY - successY) + '" rx="2" ry="2">' +
+            '<title>' + shortDate(b.bucket) + ' · 成功 ' + (b.success || 0) + '</title>' +
+            '</rect>');
+        }
+        // failed
+        if ((b.failed || 0) > 0) {
+          svgParts.push('<rect class="bar-rect-failed" x="' + failX + '" y="' + failedY + '" width="' + bw + '" height="' + (baseY - failedY) + '" rx="2" ry="2">' +
+            '<title>' + shortDate(b.bucket) + ' · 失败 ' + (b.failed || 0) + '</title>' +
+            '</rect>');
+        }
+        // rate_limited
+        if ((b.rate_limited || 0) > 0) {
+          svgParts.push('<rect class="bar-rect-rl" x="' + rlX + '" y="' + rlY + '" width="' + bw + '" height="' + (baseY - rlY) + '" rx="2" ry="2">' +
+            '<title>' + shortDate(b.bucket) + ' · 限速 ' + (b.rate_limited || 0) + '</title>' +
+            '</rect>');
+        }
+
+        // 顶部小标签：当日 total（仅 total > 0 时显示，避免噪音）
+        if ((b.total || 0) > 0) {
+          var totalLabelY = yScale(b.total || 0) - 4;
+          svgParts.push('<text class="bar-label-value" x="' + (gx + innerW / 2) + '" y="' + totalLabelY + '" text-anchor="middle" style="font-weight:600;fill:#1f2937">' + (b.total || 0) + '</text>');
+        }
+
+        // X 轴日期标签
+        svgParts.push('<text class="bar-label-axis" x="' + (gx + innerW / 2) + '" y="' + (baseY + 16) + '" text-anchor="middle">' + escapeHtml(shortMonthDay(b.bucket)) + '</text>');
+      });
+
+      // X 轴线
+      svgParts.push('<line class="bar-axis-line" x1="' + padLeft + '" y1="' + (padTop + chartH) + '" x2="' + (totalW - padRight) + '" y2="' + (padTop + chartH) + '"></line>');
+
+      svgParts.push('</svg>');
+      wrap.innerHTML = svgParts.join('');
+    }
+
+    // ========== 失败榜 ==========
+    function renderFailures(fails) {
+      var tableWrap = document.getElementById('failTableWrap');
+      var emptyEl = document.getElementById('failEmpty');
+      var tbody = document.getElementById('failTable');
+      var hint = document.getElementById('failHint');
+
+      if (!fails || fails.length === 0) {
+        tableWrap.style.display = 'none';
+        emptyEl.style.display = '';
+        hint.textContent = '暂无失败';
+        return;
+      }
+      tableWrap.style.display = '';
+      emptyEl.style.display = 'none';
+      hint.textContent = '按错误消息聚合取前 ' + fails.length;
+
+      tbody.innerHTML = fails.map(function (f, i) {
+        return '<tr>' +
+          '<td style="text-align:center;color:var(--text-secondary);font-weight:600">' + (i + 1) + '</td>' +
+          '<td class="error-msg">' + escapeHtml(f.error || '未知错误') + '</td>' +
+          '<td class="col-count">' + (f.count || 0).toLocaleString() + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    // ========== 事件绑定 ==========
+    document.getElementById('timeFilter').addEventListener('click', function (e) {
+      var btn = e.target.closest('.tf-btn');
+      if (!btn) return;
+      var days = Number(btn.getAttribute('data-days'));
+      if (!days || days === state.days) return;
+      state.days = days;
+      Array.prototype.forEach.call(this.querySelectorAll('.tf-btn'), function (b) {
+        b.classList.toggle('active', b === btn);
+      });
+      loadAll();
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', function () {
+      loadAll();
+    });
+
+    // 启动
+    loadAll();
+    // 每 30s 自动刷新（配额是内存限速，需要近实时）
+    setInterval(loadAll, 30000);
+  </script>
+</body>
+</html>
