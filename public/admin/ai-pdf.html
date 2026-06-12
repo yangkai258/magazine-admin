@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI PDF 一键生成 · 杂志管理平台</title>
+  <link rel="stylesheet" href="/admin/css/style.css?v=3">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script src="/admin/js/nav.js?v=3"></script>
+  <script src="/admin/js/topbar.js?v=3"></script>
+  <style>
+    /* ====== AI PDF 一键生成 专用样式（沿用 ai-generate.html 风格）====== */
+    .ai-hero {
+      background: linear-gradient(135deg, #059669 0%, #0d9488 50%, #0ea5e9 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 22px 26px;
+      margin-bottom: 20px;
+      box-shadow: 0 6px 20px rgba(13, 148, 136, 0.18);
+      position: relative;
+      overflow: hidden;
+    }
+    .ai-hero::before {
+      content: "";
+      position: absolute;
+      top: -40px; right: -40px;
+      width: 180px; height: 180px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 50%;
+    }
+    .ai-hero h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: relative; z-index: 1;
+    }
+    .ai-hero p {
+      font-size: 13px;
+      line-height: 1.7;
+      opacity: 0.95;
+      position: relative; z-index: 1;
+      max-width: 820px;
+    }
+    .ai-hero .hero-badges {
+      display: inline-flex;
+      gap: 6px;
+      margin-top: 10px;
+      position: relative; z-index: 1;
+    }
+    .ai-hero .hero-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    /* 通用卡片 */
+    .ai-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .ai-card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ai-card-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 18px;
+      line-height: 1.6;
+    }
+
+    /* 错误条 */
+    .ai-error-bar {
+      display: none;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+    .ai-error-bar.show { display: block; }
+    .ai-error-bar .ai-error-close {
+      float: right;
+      background: none;
+      border: none;
+      color: #991b1b;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0 0 0 8px;
+    }
+    .ai-error-bar.warn {
+      background: #fffbeb;
+      border-color: #fde68a;
+      color: #92400e;
+    }
+
+    /* 拖拽区 */
+    .pdf-drop {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 32px 24px;
+      text-align: center;
+      background: #fafafa;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .pdf-drop:hover {
+      border-color: var(--primary);
+      background: #f5f3ff;
+    }
+    .pdf-drop.dragover {
+      border-color: var(--primary);
+      background: #ede9fe;
+      border-style: solid;
+    }
+    .pdf-drop .drop-icon {
+      display: inline-flex;
+      width: 48px; height: 48px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .pdf-drop .drop-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .pdf-drop .drop-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .pdf-drop .drop-input {
+      position: absolute;
+      inset: 0;
+      width: 100%; height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    /* 已选 PDF 摘要 */
+    .pdf-summary {
+      display: none;
+      margin-top: 16px;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #f9fafb;
+    }
+    .pdf-summary.show { display: flex; align-items: center; gap: 12px; }
+    .pdf-summary .pdf-icon {
+      width: 36px; height: 36px;
+      flex-shrink: 0;
+      border-radius: 6px;
+      background: #fee2e2;
+      color: #b91c1c;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .pdf-summary .pdf-info { flex: 1; min-width: 0; }
+    .pdf-summary .pdf-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      /* XSS：值通过 textContent 写入；这里只是样式 */
+    }
+    .pdf-summary .pdf-size {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+    .pdf-summary .pdf-clear {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .pdf-summary .pdf-clear:hover {
+      color: var(--danger);
+      border-color: var(--danger);
+    }
+
+    /* 进度条 */
+    .pdf-progress {
+      display: none;
+      margin-top: 16px;
+    }
+    .pdf-progress.show { display: block; }
+    .pdf-progress .progress-stage {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .pdf-progress .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .pdf-progress .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary) 0%, #7c3aed 100%);
+      width: 0;
+      transition: width 0.2s;
+    }
+    .pdf-progress .progress-pct {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* spinner */
+    .ai-spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: ai-spin 0.7s linear infinite;
+      margin-right: 4px;
+      vertical-align: -2px;
+    }
+    .ai-spinner.dark {
+      border-color: rgba(0,0,0,0.15);
+      border-top-color: var(--primary);
+    }
+    @keyframes ai-spin { to { transform: rotate(360deg); } }
+
+    /* 表单操作 */
+    .form-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    /* 骨架预览 —— 复用 ai-generate.html 的样式（同名 class）*/
+    .ai-skeleton {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      margin-top: 8px;
+    }
+    .ai-skeleton-empty {
+      color: var(--text-secondary);
+      font-size: 13px;
+      text-align: center;
+      padding: 40px 0;
+    }
+    .ai-skeleton-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+      border-bottom: 1px dashed var(--border);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .ai-skeleton-meta strong { color: var(--text); font-weight: 600; }
+    .ai-skeleton-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .ai-skeleton-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 18px;
+      line-height: 1.7;
+    }
+    .ai-skeleton-pages {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .ai-skeleton-page {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      background: #fafafa;
+    }
+    .ai-skeleton-page-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .ai-skeleton-page-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .ai-skeleton-page-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      flex: 1;
+      min-width: 0;
+    }
+    .ai-skeleton-page-body {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .ai-skeleton-raw {
+      margin-top: 18px;
+      padding: 12px;
+      background: #1f2937;
+      color: #e5e7eb;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.6;
+      max-height: 320px;
+      overflow: auto;
+      white-space: pre;
+    }
+    .ai-skeleton-raw summary {
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      list-style: none;
+    }
+    .ai-skeleton-raw summary::-webkit-details-marker { display: none; }
+    .ai-skeleton-raw summary::before {
+      content: "\25B8 ";
+      display: inline-block;
+      transition: transform 0.15s;
+    }
+    .ai-skeleton-raw[open] summary::before { content: "\25BE "; }
+
+    /* 仅 owner 提示块 */
+    .ai-blocked {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      color: #9a3412;
+      padding: 16px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+  <script>MAG_AUTH.requireAuth();</script>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">📚 杂志管理平台</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+    <main class="main-content">
+      <header class="top-bar">
+        <h1 class="page-title">AI PDF 一键生成</h1>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="MAG_AUTH.logout()">退出登录</button>
+      </header>
+      <div class="content-area">
+        <!-- 顶部说明 -->
+        <div class="ai-hero">
+          <h2>📄 PDF 一键生成画册骨架</h2>
+          <p>
+            拖入或选择一份 PDF（最多 30 页），后端会逐页转图、调 <code>MiniMax M3</code> 给每页写标题+简介，
+            落库为 <code>enabled=0</code> 的草稿 magazine。你可以在「杂志管理」页上传封面 + 图片后启用。
+          </p>
+          <div class="hero-badges">
+            <span class="hero-badge">仅 owner 可用</span>
+            <span class="hero-badge">v6.2</span>
+            <span class="hero-badge">PDF → 骨架</span>
+            <span class="hero-badge">限速 1/20 天</span>
+          </div>
+        </div>
+
+        <!-- 仅 owner 才能用的提示 -->
+        <div id="blockedArea" class="ai-blocked" style="display:none">
+          <b>权限不足。</b> AI PDF 一键生成仅 <b>owner</b> 角色可用。请联系你的租户 owner 升级权限，或换 owner 账号登录。
+        </div>
+
+        <!-- 主交互区 -->
+        <div id="mainArea">
+          <form id="pdfForm" class="ai-card" novalidate>
+            <div class="ai-card-title">
+              <i data-lucide="file-text" style="width:18px;height:18px;color:var(--primary)"></i>
+              上传 PDF
+            </div>
+            <div class="ai-card-hint">
+              支持 .pdf，最大 ~30 页（后端硬上限）。文件名 / 路径仅用于后端审计回显，<b>不会</b>渲染到 HTML。
+            </div>
+
+            <div id="errorBar" class="ai-error-bar" role="alert">
+              <button type="button" class="ai-error-close" aria-label="关闭">×</button>
+              <span id="errorBarText"></span>
+            </div>
+
+            <!-- 拖拽区 -->
+            <div class="pdf-drop" id="dropZone">
+              <div class="drop-icon"><i data-lucide="upload-cloud" style="width:24px;height:24px"></i></div>
+              <div class="drop-title">拖入 PDF 或点击选择文件</div>
+              <div class="drop-hint">支持 .pdf · 最多 30 页 · 仅 owner</div>
+              <input class="drop-input" type="file" id="fileInput" accept=".pdf,application/pdf" required>
+            </div>
+
+            <!-- 已选 PDF 摘要 -->
+            <div class="pdf-summary" id="fileSummary">
+              <div class="pdf-icon">PDF</div>
+              <div class="pdf-info">
+                <div class="pdf-name" id="fileName">—</div>
+                <div class="pdf-size" id="fileSize">—</div>
+              </div>
+              <button type="button" class="pdf-clear" id="clearBtn">移除</button>
+            </div>
+
+            <!-- 进度条 -->
+            <div class="pdf-progress" id="progressWrap">
+              <div class="progress-stage" id="progressStage">
+                <span class="ai-spinner dark"></span>
+                <span id="progressLabel">准备上传…</span>
+              </div>
+              <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+              <div class="progress-pct" id="progressPct">0%</div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" id="submitBtn" class="btn btn-primary" disabled>
+                <i data-lucide="file-text" style="width:14px;height:14px"></i>
+                <span id="submitBtnText">开始解析</span>
+              </button>
+              <button type="button" id="applyBtn" class="btn btn-success" disabled
+                title="解析成功后可点击跳到杂志列表">
+                <i data-lucide="arrow-right" style="width:14px;height:14px"></i>
+                应用到杂志列表
+              </button>
+              <span style="margin-left:auto;font-size:12px;color:var(--text-secondary)">
+                调用 <code>POST /api/admin/magazines/import-pdf</code>
+              </span>
+            </div>
+          </form>
+
+          <!-- 骨架预览 -->
+          <div class="ai-skeleton" id="skeletonWrap">
+            <div class="ai-card-title" style="margin-bottom:14px">
+              <i data-lucide="layout-list" style="width:18px;height:18px;color:var(--primary)"></i>
+              骨架预览
+            </div>
+            <div class="ai-skeleton-empty" id="skeletonEmpty">
+              还没有生成结果 —— 上传 PDF 后会显示后端解析出的杂志骨架。
+            </div>
+            <div id="skeletonResult" style="display:none">
+              <div class="ai-skeleton-meta" id="skeletonMeta"></div>
+              <div class="ai-skeleton-title" id="skName"></div>
+              <div class="ai-skeleton-desc" id="skDesc"></div>
+              <ul class="ai-skeleton-pages" id="skPages"></ul>
+              <details class="ai-skeleton-raw" id="skRawWrap">
+                <summary>查看原始 JSON</summary>
+                <pre id="skRaw" style="margin:0;font-family:ui-monospace,Consolas,monospace"></pre>
+              </details>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/admin/js/api.js"></script>
+  <script>
+    // ============================================================
+    // 渲染侧边栏 nav（复用 nav.js）—— ai-pdf 仅 owner 可见
+    // ============================================================
+    var __ctx = null;
+    var __isOwner = false;
+    var __lastMagazineId = null;
+    var __selectedFile = null;  // 当前选中的 PDF File 对象
+
+    MAG_NAV.render('ai-pdf').then(function (ctx) {
+      __ctx = ctx;
+      var u = ctx && ctx.user;
+      __isOwner = !!(u && u.role === 'owner');
+      if (!__isOwner) {
+        document.getElementById('mainArea').style.display = 'none';
+        document.getElementById('blockedArea').style.display = '';
+      } else {
+        refreshOwnerFlag();
+      }
+    });
+
+    function refreshOwnerFlag() {
+      MAG_AUTH.getUser().then(function (u) {
+        if (u && u.role === 'owner') {
+          __isOwner = true;
+          document.getElementById('mainArea').style.display = '';
+          document.getElementById('blockedArea').style.display = 'none';
+        } else {
+          __isOwner = false;
+          document.getElementById('mainArea').style.display = 'none';
+          document.getElementById('blockedArea').style.display = '';
+        }
+      });
+    }
+
+    // ============================================================
+    // 错误条
+    // ============================================================
+    var errorBar = document.getElementById('errorBar');
+    var errorBarText = document.getElementById('errorBarText');
+    document.querySelector('.ai-error-close').addEventListener('click', function () {
+      errorBar.classList.remove('show');
+    });
+    function showError(msg, warn) {
+      errorBarText.textContent = msg;
+      errorBar.classList.toggle('warn', !!warn);
+      errorBar.classList.add('show');
+      errorBar.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // ============================================================
+    // 工具：字节数 → 人类可读
+    // ============================================================
+    function humanSize(n) {
+      if (n < 1024) return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+      return (n / 1024 / 1024).toFixed(2) + ' MB';
+    }
+
+    // ============================================================
+    // 拖拽区 + 文件选择
+    // ============================================================
+    var dropZone = document.getElementById('dropZone');
+    var fileInput = document.getElementById('fileInput');
+    var fileSummary = document.getElementById('fileSummary');
+    var fileNameEl = document.getElementById('fileName');
+    var fileSizeEl = document.getElementById('fileSize');
+    var clearBtn = document.getElementById('clearBtn');
+    var submitBtn = document.getElementById('submitBtn');
+    var submitBtnText = document.getElementById('submitBtnText');
+    var applyBtn = document.getElementById('applyBtn');
+
+    function isPdfFile(f) {
+      if (!f) return false;
+      // accept 检查：name 以 .pdf 结尾 OR type 是 application/pdf
+      var n = (f.name || '').toLowerCase();
+      return n.endsWith('.pdf') || f.type === 'application/pdf';
+    }
+
+    function selectFile(f) {
+      if (!f) return;
+      if (!isPdfFile(f)) {
+        showError('请选择 .pdf 文件（其它格式不支持）');
+        return;
+      }
+      // 大小软限制：50 MB 提示，不阻断（multer 配的 limits 才是硬限制）
+      if (f.size > 50 * 1024 * 1024) {
+        showError('PDF 超过 50 MB，可能上传失败。建议拆分后再试。', true);
+      } else {
+        errorBar.classList.remove('show');
+      }
+      __selectedFile = f;
+      // XSS 防御：文件名通过 textContent 写入；不 innerHTML
+      fileNameEl.textContent = f.name || '(未命名文件)';
+      fileSizeEl.textContent = humanSize(f.size);
+      fileSummary.classList.add('show');
+      submitBtn.disabled = false;
+      // 选了新文件就把旧的预览清掉
+      clearSkeleton();
+    }
+
+    function clearFile() {
+      __selectedFile = null;
+      fileInput.value = '';  // 清掉 file input 状态
+      fileSummary.classList.remove('show');
+      submitBtn.disabled = true;
+    }
+
+    // file input
+    fileInput.addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (f) selectFile(f);
+    });
+
+    // 拖拽事件 —— dragenter/dragover/drop
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      dropZone.addEventListener(ev, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('dragover');
+      });
+    });
+    ['dragleave', 'dragend'].forEach(function (ev) {
+      dropZone.addEventListener(ev, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        // dragleave 触发条件多，只有真正离开 dropZone 才清
+        if (e.target === dropZone) dropZone.classList.remove('dragover');
+      });
+    });
+    dropZone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove('dragover');
+      var dt = e.dataTransfer;
+      if (!dt || !dt.files || dt.files.length === 0) return;
+      var f = dt.files[0];
+      // accept 检查
+      if (!isPdfFile(f)) {
+        showError('请拖入 .pdf 文件（其它格式不支持）');
+        return;
+      }
+      // 同步 file input 的 value 让 form 提交时也带得上（虽然我们用 FormData 自传）
+      try {
+        var dt2 = new DataTransfer();
+        dt2.items.add(f);
+        fileInput.files = dt2.files;
+      } catch (_) { /* 旧浏览器可能不支持，FormData 自传已经够 */ }
+      selectFile(f);
+    });
+
+    // 移除按钮
+    clearBtn.addEventListener('click', function () {
+      clearFile();
+      clearSkeleton();
+    });
+
+    // ============================================================
+    // 进度条
+    // ============================================================
+    var progressWrap = document.getElementById('progressWrap');
+    var progressFill = document.getElementById('progressFill');
+    var progressPct = document.getElementById('progressPct');
+    var progressLabel = document.getElementById('progressLabel');
+
+    function showProgress(stageLabel) {
+      progressWrap.classList.add('show');
+      progressLabel.textContent = stageLabel || '处理中…';
+      progressFill.style.width = '0%';
+      progressPct.textContent = '0%';
+    }
+    function updateProgress(pct) {
+      // 上传阶段：直接用 onProgress 数字
+      progressFill.style.width = pct + '%';
+      progressPct.textContent = pct + '%';
+    }
+    function setStage(label) {
+      progressLabel.textContent = label;
+    }
+    function hideProgress() {
+      progressWrap.classList.remove('show');
+    }
+
+    // ============================================================
+    // 骨架预览渲染（XSS 安全：全部 textContent / createElement）
+    // ============================================================
+    var skeletonResult = document.getElementById('skeletonResult');
+    var skeletonEmpty = document.getElementById('skeletonEmpty');
+
+    function clearSkeleton() {
+      skeletonResult.style.display = 'none';
+      skeletonEmpty.style.display = '';
+      skeletonEmpty.textContent = '还没有生成结果 —— 上传 PDF 后会显示后端解析出的杂志骨架。';
+      applyBtn.disabled = true;
+      __lastMagazineId = null;
+    }
+
+    function renderSkeleton(resp) {
+      if (!resp || !resp.magazine) {
+        skeletonEmpty.style.display = '';
+        skeletonEmpty.textContent = '生成完成但响应异常，请重试。';
+        skeletonResult.style.display = 'none';
+        return;
+      }
+      var mag = resp.magazine;
+      var pages = Array.isArray(resp.pages) ? resp.pages : [];
+      var meta = resp.llm_meta || {};
+
+      skeletonEmpty.style.display = 'none';
+      skeletonResult.style.display = '';
+
+      // meta 行
+      var metaEl = document.getElementById('skeletonMeta');
+      metaEl.textContent = '';
+      var items = [
+        { k: 'magazine_id', v: mag.id },
+        { k: 'enabled',     v: mag.enabled ? 'true（注意：v6.2 默认 enabled=0）' : 'false' },
+        { k: 'source',      v: 'pdf_import' },
+        { k: 'model',       v: meta.model || '-' },
+        { k: 'duration',    v: meta.duration_ms != null ? (meta.duration_ms + ' ms') : '-' },
+        { k: 'pages',       v: pages.length }
+      ];
+      items.forEach(function (it) {
+        var wrap = document.createElement('span');
+        var k = document.createElement('span');
+        k.style.color = 'var(--text-secondary)';
+        k.textContent = it.k + ': ';
+        var v = document.createElement('strong');
+        v.textContent = String(it.v);
+        wrap.appendChild(k);
+        wrap.appendChild(v);
+        metaEl.appendChild(wrap);
+      });
+
+      // title / desc（XSS：textContent）
+      document.getElementById('skName').textContent = mag.name || '(未命名)';
+      document.getElementById('skDesc').textContent = mag.description || '';
+
+      // pages 列表
+      var ul = document.getElementById('skPages');
+      ul.textContent = '';
+      if (pages.length === 0) {
+        var li = document.createElement('li');
+        li.className = 'ai-skeleton-page';
+        li.textContent = '（PDF 解析未返回任何页）';
+        ul.appendChild(li);
+      } else {
+        pages.forEach(function (p, i) {
+          var li = document.createElement('li');
+          li.className = 'ai-skeleton-page';
+          var head = document.createElement('div');
+          head.className = 'ai-skeleton-page-head';
+          var num = document.createElement('span');
+          num.className = 'ai-skeleton-page-num';
+          num.textContent = String(p.page_order != null ? p.page_order : (i + 1));
+          var titleEl = document.createElement('span');
+          titleEl.className = 'ai-skeleton-page-title';
+          // XSS 防御：title / body 一律 textContent
+          titleEl.textContent = p.title || '(无标题)';
+          head.appendChild(num);
+          head.appendChild(titleEl);
+          var body = document.createElement('div');
+          body.className = 'ai-skeleton-page-body';
+          body.textContent = p.body || '';
+          li.appendChild(head);
+          li.appendChild(body);
+          ul.appendChild(li);
+        });
+      }
+
+      // 原始 JSON
+      try {
+        document.getElementById('skRaw').textContent = JSON.stringify(resp, null, 2);
+      } catch (e) {
+        document.getElementById('skRaw').textContent = String(resp);
+      }
+    }
+
+    // ============================================================
+    // 提交
+    // ============================================================
+    document.getElementById('pdfForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (!__isOwner) {
+        showError('仅 owner 角色可使用此功能');
+        toast('仅 owner 可用', 'error');
+        return;
+      }
+      if (!__selectedFile) {
+        showError('请先选择 PDF 文件');
+        return;
+      }
+
+      // 进入加载态
+      errorBar.classList.remove('show');
+      submitBtn.disabled = true;
+      applyBtn.disabled = true;
+      clearBtn.disabled = true;
+      submitBtnText.innerHTML = '<span class="ai-spinner"></span>处理中…';
+      skeletonResult.style.display = 'none';
+      skeletonEmpty.style.display = '';
+      skeletonEmpty.textContent = '正在处理 PDF（解析 + AI 写标题，通常 10-60 秒）…';
+
+      // 阶段 1：上传（XHR onprogress 驱动）
+      showProgress('上传中… 0%');
+
+      // 用一个守卫变量：上传完成后切到"AI 解析中…"，不再动百分比
+      var uploaded = false;
+
+      try {
+        var resp = await api.aiPdfImport(__selectedFile, function (pct) {
+          if (!uploaded) {
+            updateProgress(pct);
+            setStage('上传中… ' + pct + '%');
+          }
+        });
+        // 上传完成 + 服务器开始 PDF 解析 + LLM 阶段
+        uploaded = true;
+        updateProgress(100);
+        setStage('AI 解析中…');
+        renderSkeleton(resp);
+        var mid = resp && resp.magazine && resp.magazine.id;
+        __lastMagazineId = mid != null ? mid : null;
+        if (__lastMagazineId != null) {
+          applyBtn.disabled = false;
+          applyBtn.title = '跳到 /admin/magazine/list.html?highlight=' + __lastMagazineId;
+        }
+        toast('解析成功 · 共 ' + ((resp.pages || []).length) + ' 页', 'success');
+        // 成功后给个 1.5s 让用户看到 100% 和 "AI 解析中…" 切到 ✅
+        setTimeout(function () { hideProgress(); }, 1500);
+      } catch (err) {
+        hideProgress();
+        var msg = (err && err.message) ? String(err.message) : '解析失败';
+        var status = err && err.status;
+        // 区分错误码：401 / 403 / 400 / 500
+        if (status === 401 || /401|未登录|unauthor/i.test(msg)) {
+          toast('登录已失效，正在跳转登录页…', 'error');
+          try { document.referrer && (localStorage.mag_admin_redirect = document.referrer); } catch (_) {}
+          setTimeout(function () { location.href = '/admin/login.html'; }, 600);
+          return;
+        }
+        if (status === 403 || /403|仅 owner|forbid/i.test(msg)) {
+          showError('仅 owner 可用 · 后端返回：' + msg);
+          toast('仅 owner 可用', 'error');
+          return;
+        }
+        if (status === 400 || /400|参数|invalid|格式/i.test(msg)) {
+          showError('PDF 格式错误：' + msg + '（确认是合法 .pdf，未加密）');
+          toast('PDF 格式错误', 'error');
+          return;
+        }
+        if (status === 429) {
+          showError('AI 限速触发：' + msg + '（v6.1 限速规则：1 次/20 天）');
+          toast('AI 限速触发', 'error');
+          return;
+        }
+        if (status === 0) {
+          showError('网络错误，请检查连接后重试');
+          toast('网络错误', 'error');
+          return;
+        }
+        // 500 及其它
+        showError('服务异常（HTTP ' + (status || '?') + '）：' + msg);
+        toast('服务异常', 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtnText.textContent = '开始解析';
+        clearBtn.disabled = false;
+        if (window.lucide && window.lucide.createIcons) {
+          try { window.lucide.createIcons({ nameAttr: 'data-lucide' }); } catch (_) {}
+        }
+      }
+    });
+
+    // ============================================================
+    // 「应用到杂志列表」→ 跳到 /admin/magazine/list.html?highlight=<id>
+    // ============================================================
+    applyBtn.addEventListener('click', function () {
+      if (__lastMagazineId == null) {
+        toast('还没有生成的杂志', 'error');
+        return;
+      }
+      location.href = '/admin/magazine/list.html?highlight=' + encodeURIComponent(__lastMagazineId);
+    });
+
+    // ============================================================
+    // Lucide 图标补渲染
+    // ============================================================
+    if (window.lucide && window.lucide.createIcons) {
+      try { window.lucide.createIcons({ nameAttr: 'data-lucide' }); } catch (_) {}
+    }
+  </script>
+</body>
+</html>

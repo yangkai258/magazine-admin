@@ -58,3 +58,50 @@ function coverImg(src) {
 // v6.0 AI 一句话生成画册骨架（owner-only）—— 详细字段见 server/admin.js 的 POST /api/admin/ai/skeleton
 api.aiSkeleton = ({ prompt, title, pageCount, locale }) =>
   api.post('/admin/ai/skeleton', { prompt, title, pageCount, locale });
+
+// v6.2 PDF 智能生成（owner-only）—— 用 XHR 而非 fetch 是为了拿 upload.onprogress
+// 后端：POST /api/admin/magazines/import-pdf （multipart/form-data, field=pdf）
+// 成功：{ magazine, pages } ；失败：抛 Error，message 携带后端原始 err.message（401/403/400/500 各自区分）
+api.aiPdfImport = (file, onProgress) => {
+  return new Promise(function (resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    var form = new FormData();
+    form.append('pdf', file);
+    xhr.upload.onprogress = function (e) {
+      if (e.lengthComputable && typeof onProgress === 'function') {
+        try { onProgress(Math.round((e.loaded / e.total) * 100)); } catch (_) { /* onProgress 抛错不能断上传 */ }
+      }
+    };
+    xhr.onload = function () {
+      var status = xhr.status;
+      var raw = xhr.responseText;
+      var parsed = null;
+      try { parsed = raw ? JSON.parse(raw) : null; } catch (_) { parsed = null; }
+      if (status >= 200 && status < 300) {
+        resolve(parsed || {});
+        return;
+      }
+      // 优先用后端 JSON 的 message / error 字段；兜底用 raw text
+      var msg = (parsed && (parsed.message || parsed.error)) || raw || ('HTTP ' + status);
+      // 401/403/400/500 全部走 reject，让调用方按 status 码分支处理
+      var err = new Error(msg);
+      err.status = status;
+      err.body = parsed;
+      reject(err);
+    };
+    xhr.onerror = function () {
+      var err = new Error('网络错误，请检查连接后重试');
+      err.status = 0;
+      reject(err);
+    };
+    xhr.onabort = function () {
+      var err = new Error('上传已取消');
+      err.status = -1;
+      reject(err);
+    };
+    xhr.open('POST', API_BASE + '/admin/magazines/import-pdf', true);
+    // 不显式 setRequestHeader('Content-Type') —— 浏览器自动带 multipart boundary
+    xhr.withCredentials = true;  // session cookie 带上
+    xhr.send(form);
+  });
+};

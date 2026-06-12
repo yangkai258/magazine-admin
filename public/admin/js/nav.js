@@ -20,6 +20,7 @@
   var ITEMS = [
     { key: 'dashboard',     icon: 'layout-dashboard', label: '总览',         href: '/admin/' },
     { key: 'ai-generate',   icon: 'sparkles',         label: 'AI 一句话生成', href: '/admin/ai-generate.html', role: 'owner' },
+    { key: 'ai-pdf',        icon: 'file-text',        label: 'AI PDF 一键生成', href: '/admin/ai-pdf.html', role: 'owner' },
     { key: 'ai-stats',      icon: 'bar-chart-3',      label: 'AI 调用大屏', href: '/admin/ai-stats.html' },
     { key: 'magazine',      icon: 'book-open',        label: '杂志管理',     href: '/admin/magazine/list.html' },
     { key: 'cover',         icon: 'image',            label: '封面管理',     href: '/admin/cover/list.html' },
